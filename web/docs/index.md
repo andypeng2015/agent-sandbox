@@ -4,7 +4,10 @@ icon: lucide/rocket
 
 # Agent-Sandbox Overview
 
-![Agent-Sandbox](assets/uiimg-sbxs.png)
+<figure markdown="span">
+  ![Agent-Sandbox](assets/sbx.png)
+</figure>
+
 
 Agent-Sandbox is an open-source, Kubernetes-native runtime platform for AI agents.
 It provides isolated, stateful, multi-tenant sandboxes for code execution, browser/computer tasks, and shell workflows.
@@ -12,6 +15,8 @@ It provides isolated, stateful, multi-tenant sandboxes for code execution, brows
 The project is designed to be compatible with E2B protocol and SDK workflows while also exposing native REST API, MCP, and a web UI.
 
 ---
+
+## Features
 
 <div class="grid cards" markdown>
 
