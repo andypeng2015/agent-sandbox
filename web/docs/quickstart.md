@@ -102,10 +102,30 @@ pip install e2b-code-interpreter
 import os
 
 # Point SDK to your Agent-Sandbox instance
-os.environ['E2B_API_URL'] = 'http://localhost:8080/e2b/v1'
+os.environ['E2B_API_URL'] = 'https://agent-sandbox.your-host.com/e2b/v1'
 os.environ['E2B_API_KEY'] = 'sys-2492a85b10ed4cb083b2c76b181eac96'
-os.environ['E2B_DOMAIN'] = 'localhost:8080'
+os.environ['E2B_DOMAIN'] = 'agent-sandbox.your-host.com'
 ```
+
+#### For local development
+!!! Warning
+
+    For local or dev no HTTPS environment, the SDK's default API URL won't work. Use the following configuration to connect to a local instance without HTTPS:
+
+```python
+def local():
+    os.environ['E2B_DEBUG'] = "true"
+    os.environ['E2B_API_URL'] = 'http://localhost:10000/e2b/v1'
+    os.environ['E2B_API_KEY'] = 'testuser-aef134ef-7aa1-945e-9399-7df9a4ad0c3f'
+    os.environ['E2B_DOMAIN'] = 'localhost:10000'
+
+    def __connection_config_get_host(_, sandbox_id: str, sandbox_domain: str, port: int) -> str:
+        return f"{sandbox_domain}/sandboxes/router/{sandbox_id}/{port}"
+    from e2b import ConnectionConfig
+    ConnectionConfig.get_host = __connection_config_get_host
+```
+
+
 
 ### Create and Use a Sandbox
 
