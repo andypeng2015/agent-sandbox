@@ -62,6 +62,13 @@ Name of the ConfigMap used to store templates and sandbox template configuration
 - **Default:** `agent-sandbox`
 - **Example:** `my-sandbox-config`
 
+### `ENV_NAME`
+
+Environment name label for deployment identification.
+
+- **Default:** `dev`
+- **Example:** `production`, `staging`
+
 ---
 
 ## Sandbox Defaults
@@ -80,60 +87,6 @@ Default template name used when not specified.
 - **Default:** `aio`
 - **Example:** `code-interpreter`
 
----
-
-## E2B Compatibility
-
-These environment variables are used by E2B SDK clients to connect to Agent-Sandbox.
-
-### `E2B_DOMAIN`
-
-Domain used for sandbox URL generation.
-
-- **Default:** `localhost`
-- **Example:** `sandbox.example.com`
-- **SDK Usage:** Sets the base domain for sandbox access URLs.
-
-### `E2B_API_URL`
-
-Base URL for E2B-compatible API endpoints.
-
-- **Default:** (none, SDK uses default)
-- **Example:** `http://localhost:10000/e2b/v1`
-- **SDK Usage:** Override the API endpoint for E2B SDK calls.
-
-### `E2B_API_KEY`
-
-API key used by E2B SDK for authentication.
-
-- **Default:** (none)
-- **Example:** `sys-2492a85b10ed4cb083b2c76b181eac96`
-- **SDK Usage:** Authentication token passed in `Authorization: Bearer` header.
-
----
-
-## Sidecar: sucall-server
-
-The `sucall-server` sidecar has its own environment variables.
-
-### `SUCALL_ALLOWED_COMMAND_PREFIXES`
-
-Comma-separated list of allowed command prefixes for the `sucall` wrapper.
-
-- **Default:** `s3fs,fusermount`
-- **Example:** `ls,s3fs,fusermount,mount,umount`
-- **Note:** Commands are matched by exact prefix. `export` is always allowed as a built-in.
-
----
-
-## Miscellaneous
-
-### `ENV_NAME`
-
-Environment name label for deployment identification.
-
-- **Default:** `dev`
-- **Example:** `production`, `staging`
 
 ---
 
@@ -159,8 +112,6 @@ spec:
           value: "user1-abc123,user2-def456"
         - name: SANDBOX_NAMESPACE
           value: "agent-sandbox"
-        - name: E2B_DOMAIN
-          value: "sandbox.example.com"
 ```
 
 ---
@@ -176,8 +127,4 @@ spec:
 | `CONFIGMAP_NAME` | `agent-sandbox` | ConfigMap name for config storage |
 | `SANDBOX_DEFAULT_IMAGE` | `ghcr.io/agent-infra/sandbox:latest` | Default sandbox image |
 | `SANDBOX_DEFAULT_TEMPLATE` | `aio` | Default template name |
-| `E2B_DOMAIN` | `localhost` | E2B SDK domain |
-| `E2B_API_URL` | (none) | E2B API URL override |
-| `E2B_API_KEY` | (none) | E2B SDK API key |
-| `SUCALL_ALLOWED_COMMAND_PREFIXES` | `ls,s3fs,fusermount` | Allowed commands for sucall |
 | `ENV_NAME` | `dev` | Environment name label |

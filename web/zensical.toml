@@ -54,6 +54,8 @@ nav = [
        {"CLI" = "cli.md"},
         {"Config" = [
             {"Environment Variables" = "env.md"},
+            {"Sandbox Template" = "sandbox-template.md"},
+            {"Templates" = "templates.md"},
         ]}
     ]},
     {"Practices" = [

@@ -16,6 +16,12 @@
         <loc>https://agent-sandbox.github.io/env/</loc>
       </url>
       <url>
+        <loc>https://agent-sandbox.github.io/sandbox-template/</loc>
+      </url>
+      <url>
+        <loc>https://agent-sandbox.github.io/templates/</loc>
+      </url>
+      <url>
         <loc>https://agent-sandbox.github.io/practices/e2b_workarounds/</loc>
       </url>
 </urlset>
