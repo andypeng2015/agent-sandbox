@@ -83,7 +83,7 @@ func (s *SandboxRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
 	proxy.Transport = s.SharedTransport
 	proxy.ModifyResponse = func(resp *http.Response) error {
-		klog.V(2).Infof("routed sandbox request, url %s %s, response status %v", resp.Request.Method, resp.Request.URL, resp.StatusCode)
+		klog.V(2).Infof("routed sandbox request, response status %v, url %s %s", resp.StatusCode, resp.Request.Method, resp.Request.URL)
 		return nil
 	}
 
@@ -105,6 +105,6 @@ func (s *SandboxRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rw := NewResponseWare(w, http.StatusOK)
 	proxy.ServeHTTP(rw, r)
 	s.activator.RecordLastEvent(activator.EventTypeLastResponse, name)
-	klog.Info("route request to sandbox ", name, " completed")
+	klog.Info("route completed request to sandbox ", name)
 	return
 }

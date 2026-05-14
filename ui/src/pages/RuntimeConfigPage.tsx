@@ -28,10 +28,6 @@ const emptyRuntimeConfig: RuntimeConfigDraft = {
   sandbox_default_template: '',
 }
 
-function formatLimit(value: number): string {
-  return value > 0 ? String(value) : 'Unlimited'
-}
-
 function parseNonNegativeInteger(value: string, fieldName: string): number {
   const trimmed = value.trim()
   if (trimmed === '') {

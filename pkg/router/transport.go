@@ -17,17 +17,55 @@
 package router
 
 import (
+	"context"
+	"errors"
 	"net"
 	"net/http"
+	"syscall"
 	"time"
+
+	"k8s.io/klog/v2"
 )
 
+const (
+	sandboxProxyDialMaxAttempts = 10
+	sandboxProxyDialRetryDelay  = 500 * time.Millisecond
+)
+
+func dialContextWithRetry(dialer *net.Dialer) func(context.Context, string, string) (net.Conn, error) {
+	return func(ctx context.Context, network, address string) (net.Conn, error) {
+		var lastErr error
+		for attempt := 1; attempt <= sandboxProxyDialMaxAttempts; attempt++ {
+			conn, err := dialer.DialContext(ctx, network, address)
+			if err == nil || !isConnectionRefused(err) || attempt == sandboxProxyDialMaxAttempts {
+				return conn, err
+			}
+
+			lastErr = err
+			// The pod can have an IP before the sandbox service starts listening on its port.
+			select {
+			case <-time.After(sandboxProxyDialRetryDelay):
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+			klog.V(1).Infof("retry sandbox proxy dial attempt=%d network=%s address=%s error=%v", attempt, network, address, err)
+		}
+		return nil, lastErr
+	}
+}
+
+func isConnectionRefused(err error) bool {
+	return errors.Is(err, syscall.ECONNREFUSED)
+}
+
 func getTransport() *http.Transport {
+	dialer := &net.Dialer{
+		Timeout:   5 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+
 	transport := &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout:   5 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
+		DialContext: dialContextWithRetry(dialer),
 
 		TLSHandshakeTimeout: 5 * time.Second,
 

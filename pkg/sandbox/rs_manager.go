@@ -25,18 +25,18 @@ import (
 	"context"
 	"text/template"
 
+	"github.com/agent-sandbox/agent-sandbox/pkg/config"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	podclient "knative.dev/pkg/client/injection/kube/informers/core/v1/pod"
-
-	"github.com/agent-sandbox/agent-sandbox/pkg/config"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
+	rsclient "knative.dev/pkg/client/injection/kube/informers/apps/v1/replicaset"
+	podclient "knative.dev/pkg/client/injection/kube/informers/core/v1/pod"
 
 	"sigs.k8s.io/yaml"
 
 	v1 "k8s.io/api/apps/v1"
-	v1meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // buildReplicaSet Build a Kubernetes ReplicaSet from a Sandbox object
@@ -77,8 +77,11 @@ func buildReplicaSet(sb *Sandbox) (*v1.ReplicaSet, error) {
 // WaitForReplicaSetReady waits for a ReplicaSet to become ready
 func (s *Controller) WaitForReplicaSetReady(sb *Sandbox) error {
 	return wait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
-		rsCreated, err := s.kclient.AppsV1().ReplicaSets(config.Cfg.SandboxNamespace).Get(context.TODO(), sb.Name, v1meta.GetOptions{})
+		rsCreated, err := rsclient.Get(s.rootCtx).Lister().ReplicaSets(config.Cfg.SandboxNamespace).Get(sb.Name)
 		if err != nil {
+			if errors.IsNotFound(err) {
+				return false, nil
+			}
 			return false, err
 		}
 		// Check if the ReplicaSet is ready

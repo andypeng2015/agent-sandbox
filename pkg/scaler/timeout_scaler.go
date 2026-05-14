@@ -59,6 +59,9 @@ func (s *Scaler) ScalingDownOfTimeout() {
 			}
 			r.Event(obj, corev1.EventTypeNormal, "ScaleDownTimeout", "Sandbox scaled down due to timeout")
 			klog.Infof("Scaled down sandbox %s CreationTimestamp %s Timeout %v IdleTimeout %v", sb.Name, sb.CreatedAt, sb.Timeout, sb.IdleTimeout)
+
+			// to reduce kube-apiserver pressure
+			time.Sleep(300 * time.Millisecond)
 		}
 
 	}

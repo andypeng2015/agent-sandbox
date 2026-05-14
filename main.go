@@ -37,9 +37,14 @@ func main() {
 	var err error
 
 	klog.InitFlags(&fs)
-	fs.Set("v", "2")
-
 	klog.Infof("Loaded config %+v", config.Cfg)
+
+	// set log level
+	if cfg.EnvName == "dev" {
+		fs.Set("v", "2")
+	} else {
+		fs.Set("v", "0")
+	}
 
 	klog.Info("Setup k8s cluster connection and start informers")
 
@@ -51,8 +56,8 @@ func main() {
 	log.Printf("Registering %d informers", len(injection.Default.GetInformers()))
 	log.Printf("Registering %d filtered informers", len(injection.Default.GetFilteredInformers()))
 
-	kubecfg.QPS = 2 * rest.DefaultQPS
-	kubecfg.Burst = 2 * rest.DefaultBurst
+	kubecfg.QPS = 20 * rest.DefaultQPS
+	kubecfg.Burst = 20 * rest.DefaultBurst
 	rootCtx = injection.WithNamespaceScope(rootCtx, config.Cfg.SandboxNamespace)
 	rootCtx, informers := injection.Default.SetupInformers(rootCtx, kubecfg)
 
@@ -64,7 +69,7 @@ func main() {
 
 	// bootstrap and load runtime configuration from configmap
 	cfg.KubeClient = kubeClient
-	cfg.CheckConfigmap()
+	cfg.CheckAndSaveConfigToConfigmap()
 
 	// watch configmap for dynamic update
 	configMapWatcher := configmapinformer.NewInformedWatcher(kubeClient, cfg.SandboxNamespace)

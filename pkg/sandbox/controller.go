@@ -67,7 +67,7 @@ func NewController(ctx context.Context, cfg *rest.Config, pl *PoolManager) *Cont
 
 func (s *Controller) GetRSByID(id string) (*v1.ReplicaSet, error) {
 	selector := labels.Set{IDLabel: id, PoolLabel: "false"}.AsSelector()
-	rss, err := rsclient.Get(s.rootCtx).Lister().List(selector)
+	rss, err := rsclient.Get(s.rootCtx).Lister().ReplicaSets(config.Cfg.SandboxNamespace).List(selector)
 	if err != nil {
 		klog.Errorf("Failed to list rs, id %s error %v", id, err)
 		return nil, err
@@ -804,14 +804,11 @@ func (s *Controller) CountByUser(user string) (int, error) {
 		UserLabel: user,
 		PoolLabel: "false",
 	}.AsSelector()
-	rsList, err := s.kclient.AppsV1().ReplicaSets(config.Cfg.SandboxNamespace).List(
-		context.TODO(),
-		v1meta.ListOptions{LabelSelector: selector.String()},
-	)
+	rsList, err := rsclient.Get(s.rootCtx).Lister().List(selector)
 	if err != nil {
 		return 0, fmt.Errorf("failed to list replicasets for user %s: %w", user, err)
 	}
-	return len(rsList.Items), nil
+	return len(rsList), nil
 }
 
 func (s *Controller) CountAllByUser() (map[string]int, error) {
@@ -819,32 +816,16 @@ func (s *Controller) CountAllByUser() (map[string]int, error) {
 		"owner":   "agent-sandbox",
 		PoolLabel: "false",
 	}.AsSelector()
-	rsList, err := s.kclient.AppsV1().ReplicaSets(config.Cfg.SandboxNamespace).List(
-		context.TODO(),
-		v1meta.ListOptions{LabelSelector: selector.String()},
-	)
+	rsList, err := rsclient.Get(s.rootCtx).Lister().List(selector)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list replicasets: %w", err)
 	}
 
 	counts := make(map[string]int)
-	for _, rs := range rsList.Items {
+	for _, rs := range rsList {
 		if user, ok := rs.Labels[UserLabel]; ok && user != "" {
 			counts[user]++
 		}
 	}
 	return counts, nil
-}
-
-func (s *Controller) ListAllUsers() ([]string, error) {
-	counts, err := s.CountAllByUser()
-	if err != nil {
-		return nil, err
-	}
-
-	users := make([]string, 0, len(counts))
-	for user := range counts {
-		users = append(users, user)
-	}
-	return users, nil
 }
