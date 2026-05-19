@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package ratelimit
+package capacity
 
 import (
 	"fmt"

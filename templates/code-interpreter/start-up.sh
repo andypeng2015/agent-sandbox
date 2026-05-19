@@ -18,4 +18,4 @@ function start_jupyter_server() {
 }
 
 echo "Starting Code Interpreter server..."
-start_jupyter_server & MATPLOTLIBRC=/root/.config/matplotlib/.matplotlibrc jupyter server --ip=0.0.0.0 --no-browser --IdentityProvider.token="" >/dev/null 2>&1 & /workspace/envd/envd >/dev/null 2>&1
+start_jupyter_server & /workspace/envd/envd >/dev/null 2>&1 & MATPLOTLIBRC=/root/.config/matplotlib/.matplotlibrc jupyter server --ip=0.0.0.0 --no-browser --IdentityProvider.token="" >/dev/null 2>&1

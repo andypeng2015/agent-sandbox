@@ -41,3 +41,12 @@ V0.4.2 - 2026-04-02
 - 改进：UI Sandboxes和Pool Sandboxes增加排序功能，默认按照创建时间排序
 - 破坏性变更：移除以编程方式设置 sandbox-template labels，改为在 sandbox-template 中配置全部 labels，参考：[sandbox.yaml](config/sandbox.yaml)
 --------------------------
+V0.5.0 - 2026-05-19
+- 新增：容量管理，支持设置全局容量限制和单个Token的容量限制，包括并行创建沙箱限制和沙箱总量的配额限制；
+- 新增：极速启动模式，no-startupProbe+transport-dial-retry，达到不用Pool的也能极速启动的效果，约1s-3s启动一个沙箱；
+- 新增：Idle Timeout机制，支持配置沙箱空闲超时时间，没有HTTP请求，没有Command Exec或Files等操作，自动回收空闲沙箱，`Sandbox.create(timeout=60*30,metadata={"idleTimeout":"300"})`；
+- 新增：基础配置热更新，支持动态调整常用配置项，包括Token配置，默认模版名称配置，容量配置等；
+- 改进：性能优化，调整client-go并发参数，以及全部用Informer代替Api Server查询，减少API Server的压力，提升并行性能，50并发创建200个沙箱平均2.8s；
+- 改进：Sandbox环境变量，在Sandbox内通过环境变量获取Sandbox ID等信息；
+- 变更：移除未使用的Template Resources配置；
+--------------------------

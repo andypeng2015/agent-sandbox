@@ -65,6 +65,7 @@ func (a *Activator) RecordLastEvent(eventType string, name string) {
 	now := time.Now()
 	cacheKey := eventType + "/" + name
 
+	// record event at most once in recordEventInterval for the same sandbox and event type avoid too many events when sandbox is under high QPS
 	a.lastEventRecordMux.Lock()
 	lastAt, ok := a.lastEventRecordAt[cacheKey]
 	if ok && now.Sub(lastAt) < recordEventInterval {
@@ -105,11 +106,14 @@ func (a *Activator) GetLastRequestTime(name string) int64 {
 		klog.ErrorS(err, "Failed to get last request event", "name", name)
 		return 0
 	}
+
+	lastTimestamp := int64(0)
+
 	for _, item := range items.Items {
-		if item.Reason == EventTypeLastRequest {
-			return item.LastTimestamp.Unix()
+		if item.Reason == EventTypeLastRequest && item.LastTimestamp.Unix() > lastTimestamp {
+			lastTimestamp = item.LastTimestamp.Unix()
 		}
 	}
 
-	return 0
+	return lastTimestamp
 }

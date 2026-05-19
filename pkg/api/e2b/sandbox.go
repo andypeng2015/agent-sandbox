@@ -22,11 +22,12 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/agent-sandbox/agent-sandbox/pkg/api/e2b/api"
 	"github.com/agent-sandbox/agent-sandbox/pkg/auth"
-	"github.com/agent-sandbox/agent-sandbox/pkg/ratelimit"
+	"github.com/agent-sandbox/agent-sandbox/pkg/capacity"
 	"github.com/agent-sandbox/agent-sandbox/pkg/sandbox"
 	"github.com/agent-sandbox/agent-sandbox/pkg/utils"
 	"k8s.io/klog/v2"
@@ -133,10 +134,10 @@ func (a *Handler) CreateSandbox(ctx context.Context, newSandbox *api.NewSandbox)
 		}
 	}
 
-	if ratelimit.GlobalLimiter != nil && ratelimit.GlobalLimiter.Enabled() {
-		release, err := ratelimit.GlobalLimiter.AcquireCreate(user)
+	if capacity.GlobalLimiter != nil && capacity.GlobalLimiter.Enabled() {
+		release, err := capacity.GlobalLimiter.AcquireCreate(user)
 		if err != nil {
-			limitErr := err.(*ratelimit.LimitError)
+			limitErr := err.(*capacity.LimitError)
 			return nil, &APIError{ClientMsg: limitErr.Message, Code: limitErr.Code}
 		}
 		if release != nil {
@@ -154,7 +155,36 @@ func (a *Handler) CreateSandbox(ctx context.Context, newSandbox *api.NewSandbox)
 	sb.Template = tplID
 	sb.Metadata = newSandbox.Metadata
 	sb.EnvVars = newSandbox.EnvVars
+
+	if newSandbox.Timeout <= 300 || newSandbox.Timeout > 60*60*12 {
+		return nil, &APIError{
+			ClientMsg: fmt.Sprintf("invalid timeout %d, must be in 300 ~  36000 (unit is seconds, 5 minutes ~ 10 hours)", newSandbox.Timeout),
+			Code:      http.StatusBadRequest,
+		}
+	}
 	sb.Timeout = newSandbox.Timeout
+
+	idlePolicyStr := newSandbox.Metadata["idlePolicy"]
+	if idlePolicyStr != "" {
+		sb.IdlePolicy = idlePolicyStr
+	}
+	idleTimeoutStr := newSandbox.Metadata["idleTimeout"]
+	if idleTimeoutStr != "" {
+		v, err := strconv.Atoi(idleTimeoutStr)
+		if err == nil {
+			if 5*60 <= v && v <= 50*60 {
+				sb.IdleTimeout = v
+			} else {
+				errMsg := fmt.Sprintf("invalid idle timeout %s, must be in 300 ~ 3000 (unit is seconds, 5 minutes ~ 50 minutes)", idleTimeoutStr)
+				return nil, &APIError{
+					ClientMsg: errMsg,
+					Code:      http.StatusBadRequest,
+				}
+			}
+		} else {
+			klog.Errorf("failed to parse idle timeout %s: %v", idleTimeoutStr, err)
+		}
+	}
 
 	// init name and valid fields
 	if err := sb.Make(); err != nil {

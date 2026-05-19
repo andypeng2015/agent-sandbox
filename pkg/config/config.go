@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -34,84 +33,11 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const Version = "0.4.3"
+const Version = "0.5.0"
 
-type Resources struct {
-	CPU         string `json:"cpu"`
-	Memory      string `json:"memory"`
-	CPULimit    string `json:"cpuLimit"`
-	MemoryLimit string `json:"memoryLimit"`
-}
-
-type TemplatePool struct {
-	Size       int       `json:"size" required:"false"`
-	ReadySize  int       `json:"readySize" required:"false"`
-	ProbePort  int       `json:"probePort" required:"false"`
-	WarmupCmd  string    `json:"warmupCmd" required:"false"`
-	StartupCmd string    `json:"startupCmd" required:"false"`
-	Resources  Resources `json:"resources" required:"false"`
-}
-
-type Template struct {
-	Name           string            `json:"name" required:"false"`
-	Pattern        string            `json:"pattern" required:"false"`
-	Image          string            `json:"image" required:"false"`
-	Port           int               `json:"port" required:"false"`
-	Type           string            `json:"type" required:"false" description:"dynamic or static, default is static, dynamic means template is dynamic by regexp"`
-	Metadata       map[string]string `json:"metadata" required:"false"`
-	NoStartupProbe bool              `json:"noStartupProbe" required:"false"`
-	Args           []string          `json:"args" required:"false"`
-	Resources      Resources         `json:"resources"  required:"false"`
-	Pool           TemplatePool      `json:"pool" required:"false"`
-	Description    string            `json:"description" required:"false"`
-}
-
-type RateLimitConfig struct {
-	Enabled        bool `json:"enabled" split_words:"true" default:"true"`
-	MaxConcurrency int  `json:"max_concurrency" split_words:"true" default:"10"`
-	MaxSandbox     int  `json:"max_sandbox" split_words:"true" default:"100"`
-}
-
-func (c *RateLimitConfig) UnmarshalJSON(data []byte) error {
-	type rateLimitConfig RateLimitConfig
-	var raw struct {
-		rateLimitConfig
-		EnabledLegacy        *bool `json:"Enabled"`
-		MaxConcurrencyLegacy *int  `json:"MaxConcurrency"`
-		MaxSandboxLegacy     *int  `json:"MaxSandbox"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	*c = RateLimitConfig(raw.rateLimitConfig)
-	if raw.EnabledLegacy != nil {
-		c.Enabled = *raw.EnabledLegacy
-	}
-	if raw.MaxConcurrencyLegacy != nil {
-		c.MaxConcurrency = *raw.MaxConcurrencyLegacy
-	}
-	if raw.MaxSandboxLegacy != nil {
-		c.MaxSandbox = *raw.MaxSandboxLegacy
-	}
-	return nil
-}
-
-func (c *RateLimitConfig) Validate() {
-	if c.MaxConcurrency < 0 {
-		klog.Warningf("MaxConcurrency invalid (%d), using default 10", c.MaxConcurrency)
-		c.MaxConcurrency = 10
-	}
-	if c.MaxSandbox < 0 {
-		klog.Warningf("MaxSandbox invalid (%d), using default 100", c.MaxSandbox)
-		c.MaxSandbox = 100
-	}
-}
-
-type UserRateLimitConfig struct {
-	User           string `json:"user"`
-	MaxConcurrency int    `json:"max_concurrency"`
-	MaxSandbox     int    `json:"max_sandbox"`
-}
+var Cfg *Config
+var Templates []*Template
+var SandboxDeployTemplate string
 
 type RuntimeConfig struct {
 	SystemToken            *string          `json:"system_token,omitempty"`
@@ -121,25 +47,6 @@ type RuntimeConfig struct {
 	SandboxDefaultImage    *string          `json:"sandbox_default_image,omitempty"`
 	SandboxDefaultTemplate *string          `json:"sandbox_default_template,omitempty"`
 }
-
-func (c *UserRateLimitConfig) Validate() bool {
-	if c.User == "" {
-		return false
-	}
-	if c.MaxConcurrency < 0 {
-		klog.Warningf("UserRateLimitConfig.MaxConcurrency negative for user=%s, will use default", c.User)
-		c.MaxConcurrency = 0
-	}
-	if c.MaxSandbox < 0 {
-		klog.Warningf("UserRateLimitConfig.MaxSandbox negative for user=%s, will use default", c.User)
-		c.MaxSandbox = 0
-	}
-	return true
-}
-
-var Cfg *Config
-var Templates []*Template
-var SandboxDeployTemplate string
 
 type Config struct {
 	KubeClient kubernetes.Interface `ignored:"true"`
@@ -638,79 +545,4 @@ func (c *Config) SaveRuntimeConfigToCM(content string) error {
 	existCm.Data[RuntimeConfigMapKey] = content
 	_, err = cmClient.Update(context.TODO(), existCm, metav1.UpdateOptions{})
 	return err
-}
-
-func GetTemplateByName(name string) (*Template, error) {
-	for _, t := range Templates {
-		if t.Name == name {
-			return t, nil
-		}
-	}
-
-	for _, t := range Templates {
-		if t.Type == "dynamic" {
-			image := t.Image
-			//match by regexp
-			re := regexp.MustCompile(t.Pattern)
-			match := re.FindStringSubmatch(name)
-			if len(match) == 0 {
-				continue
-			}
-
-			if len(match) > 0 {
-				versionIndex := re.SubexpIndex("version")
-				nameIndex := re.SubexpIndex("name")
-				if nameIndex == -1 || versionIndex == -1 {
-					continue
-				}
-
-				tversion := match[versionIndex]
-				tname := match[nameIndex]
-				image = strings.ReplaceAll(image, "<name>", tname)
-				image = strings.ReplaceAll(image, "<version>", tversion)
-			}
-
-			dynT := &Template{
-				Name:           t.Name,
-				Image:          image,
-				Port:           t.Port,
-				Pattern:        t.Pattern,
-				Pool:           t.Pool,
-				Type:           t.Type,
-				NoStartupProbe: t.NoStartupProbe,
-				Description:    t.Description,
-			}
-			return dynT, nil
-		}
-	}
-
-	klog.Errorf("Template %s not found", name)
-	return nil, fmt.Errorf("Template  %s not found", name)
-}
-
-// GetTemplatesForMCPTools return json string, but exclude image field
-func GetTemplatesForMCPTools() string {
-	type TplForTool struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-	}
-
-	var tpls []TplForTool
-	for _, env := range Templates {
-		if env.Type == "dynamic" {
-			continue
-		}
-		tpls = append(tpls, TplForTool{
-			Name:        env.Name,
-			Description: env.Description,
-		})
-	}
-
-	tplsJson, err := json.MarshalIndent(tpls, "", "  ")
-	if err != nil {
-		klog.Errorf("Failed to marshal Templates for MCP tools: %v", err)
-		return ""
-	}
-
-	return string(tplsJson)
 }

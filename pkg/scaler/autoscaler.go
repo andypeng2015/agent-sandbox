@@ -48,7 +48,7 @@ func (s *Scaler) RunScaling() {
 		select {
 		case <-ticker.C:
 			s.ScalingDownOfTimeout()
-			//s.ScalingDownOfIdleTimeout()
+			s.ScalingDownOfIdleTimeout()
 		case <-s.rootCtx.Done():
 			klog.Info("Scaler stopping")
 			return

@@ -41,3 +41,12 @@ V0.4.2 - 2026-04-02
 - Improve: add sorting for Sandboxes and Pool Sandboxes in UI, with default ordering by creation time.
 - Breaking change: remove programmatic label assignment for sandbox-template; configure all labels directly in sandbox-template **update it before upgrade this version** . Reference: [sandbox.yaml](config/sandbox.yaml).
 --------------------------
+V0.5.0 - 2026-05-19
+- Add: capacity management, with support for global capacity limits and per-token capacity limits, including concurrent sandbox creation limits and total sandbox quota limits.
+- Add: fast startup mode with no-startupProbe and transport dial retry, enabling fast sandbox startup without using a pool, typically starting a sandbox in about 1-3 seconds.
+- Add: idle timeout mechanism, supporting sandbox idle timeout configuration. Sandboxes with no HTTP requests, command exec, files, or other operations are automatically reclaimed, for example: `Sandbox.create(timeout=60*30, metadata={"idleTimeout":"300"})`.
+- Add: runtime configuration hot reload, supporting dynamic updates for common configuration items including token config, default template name config, and capacity config.
+- Improve: performance optimization by tuning client-go concurrency parameters and replacing API server queries with informers to reduce API server pressure and improve parallel performance. Creating 200 sandboxes with concurrency 50 averages 2.8 seconds.
+- Improve: sandbox environment variables, allowing sandbox ID and related information to be accessed from inside the sandbox through environment variables.
+- Change: remove unused Template Resources config.
+--------------------------

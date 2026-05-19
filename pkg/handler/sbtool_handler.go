@@ -57,7 +57,7 @@ func (a *Handler) executorHandler(ctx context.Context, req *mcp.CallToolRequest,
 		Arguments: tool.Arguments,
 	})
 
-	a.activator.RecordLastEvent(activator.EventTypeLastResponse, tool.SandboxName)
+	//a.activator.RecordLastEvent(activator.EventTypeLastResponse, tool.SandboxName)
 
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to call tool %s in sandbox %s: %v", tool.ToolName, tool.SandboxName, err)

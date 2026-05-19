@@ -41,7 +41,6 @@ export type TemplatePool = {
   probePort?: number
   warmupCmd?: string
   startupCmd?: string
-  resources?: TemplateResources
 }
 
 export type Template = {

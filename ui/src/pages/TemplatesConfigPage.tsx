@@ -12,11 +12,9 @@ type EditableTemplateResources = {
 
 type EditableTemplatePool = {
   size?: number | string
-  readySize?: number | string
   probePort?: number | string
   warmupCmd?: string
   startupCmd?: string
-  resources?: EditableTemplateResources
 }
 
 type EditableTemplate = Omit<Template, 'port' | 'pool' | 'resources'> & {
@@ -173,11 +171,9 @@ function toSaveTemplatesPayload(templates: EditableTemplate[]): Template[] {
       resources: parseResources(template.resources),
       pool: {
         size: parseOptionalInteger(pool?.size, `Template #${index + 1} pool.size`),
-        readySize: parseOptionalInteger(pool?.readySize, `Template #${index + 1} pool.readySize`),
         probePort: parseOptionalInteger(pool?.probePort, `Template #${index + 1} pool.probePort`),
         warmupCmd: pool?.warmupCmd?.trim() || undefined,
         startupCmd: pool?.startupCmd?.trim() || undefined,
-        resources: parseResources(pool?.resources),
       },
     }
   })
@@ -636,30 +632,6 @@ export default function TemplatesConfigPage() {
                           <div className="divider md:col-span-2 my-0"></div>
 
                         <div className="md:col-span-2 text-sm font-medium">Template Pool Settings</div>
-
-                        <ResourcesEditor
-                          title="Pool Resources"
-                          resources={selectedTemplate.pool?.resources}
-                          onChange={(field, value) => {
-                            updateSelectedTemplate((prev) => ({
-                              ...prev,
-                              pool: {
-                                ...prev.pool,
-                                resources: {
-                                  ...prev.pool?.resources,
-                                  [field]: value,
-                                },
-                              },
-                            }))
-                          }}
-                        />
-
-                        <label className="form-control w-full">
-                          <div className="label">
-                            <span className="label-text">Pool Ready Size</span>
-                          </div>
-                          <input className="input input-sm input-bordered w-full" type="text" value={selectedTemplate.pool?.readySize ?? ''} onChange={(event) => updateSelectedTemplate((prev) => ({ ...prev, pool: { ...prev.pool, readySize: event.target.value } }))} />
-                        </label>
 
                         <label className="form-control w-full">
                           <div className="label">

@@ -73,14 +73,16 @@ spec:
       serviceAccountName: agent-sandbox
       containers:
         - env:
+            - name: SYSTEM_TOKEN
+              value: "sys-2492a85b10ed4cb083b2c76b181eac96"
             - name: KUBERNETES_MIN_VERSION
-              value: "1.26.0"
+              value: "1.28.0"
             - name: SANDBOX_NAMESPACE
               valueFrom:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: metadata.namespace
-          image: ghcr.io/agent-sandbox/agent-sandbox:0.4.2
+          image: ghcr.io/agent-sandbox/agent-sandbox:0.5.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
             failureThreshold: 5

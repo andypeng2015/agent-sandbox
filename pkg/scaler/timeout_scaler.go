@@ -37,7 +37,7 @@ func (s *Scaler) ScalingDownOfTimeout() {
 	for _, sb := range sbs {
 		createT := sb.CreatedAt
 		timeout := sb.Timeout
-		if timeout == -1 {
+		if timeout <= 0 {
 			continue
 		}
 		tt := createT.Add(time.Duration(timeout) * time.Second)
@@ -57,7 +57,7 @@ func (s *Scaler) ScalingDownOfTimeout() {
 					Namespace: config.Cfg.SandboxNamespace,
 				},
 			}
-			r.Event(obj, corev1.EventTypeNormal, "ScaleDownTimeout", "Sandbox scaled down due to timeout")
+			r.Event(obj, corev1.EventTypeWarning, "ScaleDownTimeout", "Sandbox scaled down due to timeout")
 			klog.Infof("Scaled down sandbox %s CreationTimestamp %s Timeout %v IdleTimeout %v", sb.Name, sb.CreatedAt, sb.Timeout, sb.IdleTimeout)
 
 			// to reduce kube-apiserver pressure

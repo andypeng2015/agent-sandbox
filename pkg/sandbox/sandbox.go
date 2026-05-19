@@ -88,10 +88,10 @@ type Sandbox struct {
 	EnvVars map[string]string `json:"envVars,omitempty"`
 
 	// Maximum lifetime of the sandbox in seconds. timeout is reached apply to delete action
-	Timeout int `json:"timeout,omitempty" default:"1800"` // default 30m, 0 is no timeout
+	Timeout int `json:"timeout,omitempty" default:"1800"` // default 30m, -1 is no timeout
 
 	// The amount of time in seconds that a sandbox can be idle before being terminated.
-	IdleTimeout int `json:"idle_timeout,omitempty"` // default 10m
+	IdleTimeout int `json:"idle_timeout,omitempty"` // default 10m, -1 is no timeout
 
 	// Policy to apply when the idle is reached. Options are 'delete' or 'scaledown'.
 	IdlePolicy string `json:"idle_policy,omitempty" default:"delete"` // default delete
@@ -159,9 +159,10 @@ func validAndRestValueOfSandbox(sb *Sandbox) {
 		sb.Timeout = 30 * 60 // default 30 minutes
 	}
 
-	// one hour max
-	if sb.IdleTimeout > 60*60 {
-		sb.IdleTimeout = 60 * 60
+	// 50m max
+	// since k8s events default retention time is 1h, so the max idle timeout is set to 50m to make sure the last request event can be recorded in k8s events and can be used for idle timeout check in scaler
+	if sb.IdleTimeout > 50*60 {
+		sb.IdleTimeout = 50 * 60
 	}
 
 	// check resources is not set and set to default value
@@ -189,13 +190,17 @@ func (sb *Sandbox) Make() error {
 
 	t := &config.Template{}
 
-	// no set any params, use default template
+	// no set any params, use default template or image
 	if sb.Template == "" && sb.Image == "" {
-		sb.Template = config.Cfg.GetSandboxDefaultTemplate()
-		sb.Image = config.Cfg.GetSandboxDefaultImage()
-		t = &config.Template{
-			Name:  sb.Template,
-			Image: sb.Image,
+		defTpl := config.Cfg.GetSandboxDefaultTemplate()
+		defImg := config.Cfg.GetSandboxDefaultImage()
+
+		if defTpl != "" {
+			sb.Template = defTpl
+		}
+
+		if defImg != "" && defTpl == "" {
+			sb.Image = defImg
 		}
 	}
 
@@ -262,6 +267,13 @@ func (sb *Sandbox) Make() error {
 			sb.Name = sb.Name[:63]
 		}
 	}
+
+	// set sandbox id to envVars
+	if sb.EnvVars == nil {
+		sb.EnvVars = make(map[string]string)
+	}
+	sb.EnvVars["AGENT_SANDBOX_ID"] = sb.ID
+	sb.EnvVars["AGENT_SANDBOX_NAME"] = sb.Name
 
 	// other default values
 	validAndRestValueOfSandbox(sb)

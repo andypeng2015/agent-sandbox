@@ -104,7 +104,7 @@ func (s *SandboxRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	rw := NewResponseWare(w, http.StatusOK)
 	proxy.ServeHTTP(rw, r)
-	s.activator.RecordLastEvent(activator.EventTypeLastResponse, name)
+	//s.activator.RecordLastEvent(activator.EventTypeLastResponse, name)
 	klog.Info("route completed request to sandbox ", name)
 	return
 }

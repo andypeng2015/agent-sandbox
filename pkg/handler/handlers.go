@@ -32,8 +32,8 @@ import (
 
 	"github.com/agent-sandbox/agent-sandbox/pkg/activator"
 	"github.com/agent-sandbox/agent-sandbox/pkg/auth"
+	"github.com/agent-sandbox/agent-sandbox/pkg/capacity"
 	"github.com/agent-sandbox/agent-sandbox/pkg/config"
-	"github.com/agent-sandbox/agent-sandbox/pkg/ratelimit"
 	"github.com/agent-sandbox/agent-sandbox/pkg/sandbox"
 	"github.com/agent-sandbox/agent-sandbox/pkg/utils"
 	"github.com/gorilla/websocket"
@@ -186,10 +186,10 @@ func (a *Handler) CreateSandbox(r *http.Request) (interface{}, error) {
 		return nil, fmt.Errorf("user not found, api key may be invalid")
 	}
 
-	if ratelimit.GlobalLimiter != nil && ratelimit.GlobalLimiter.Enabled() {
-		release, err := ratelimit.GlobalLimiter.AcquireCreate(user)
+	if capacity.GlobalLimiter != nil && capacity.GlobalLimiter.Enabled() {
+		release, err := capacity.GlobalLimiter.AcquireCreate(user)
 		if err != nil {
-			limitErr := err.(*ratelimit.LimitError)
+			limitErr := err.(*capacity.LimitError)
 			return nil, &HTTPError{Code: limitErr.Code, Message: limitErr.Message}
 		}
 		if release != nil {
@@ -329,14 +329,14 @@ func (a *Handler) GetRateLimitStatus(r *http.Request) (interface{}, error) {
 		return nil, fmt.Errorf("user not found, api key may be invalid")
 	}
 
-	if ratelimit.GlobalLimiter == nil {
+	if capacity.GlobalLimiter == nil {
 		return AllRateLimitStatus{
 			DefaultConfig: RateLimitDefaultConfig{},
 			Users:         []RateLimitStatus{},
 		}, nil
 	}
 
-	defaultConfig := ratelimit.GlobalLimiter.DefaultConfig()
+	defaultConfig := capacity.GlobalLimiter.DefaultConfig()
 	result := AllRateLimitStatus{
 		DefaultConfig: RateLimitDefaultConfig{
 			Enabled:        defaultConfig.Enabled,
@@ -346,7 +346,7 @@ func (a *Handler) GetRateLimitStatus(r *http.Request) (interface{}, error) {
 		Users: []RateLimitStatus{},
 	}
 
-	counts, err := ratelimit.GlobalLimiter.CountAllByUser()
+	counts, err := capacity.GlobalLimiter.CountAllByUser()
 	if err != nil {
 		klog.Warningf("Failed to list user sandbox counts for rate limit stats: %v", err)
 		counts = map[string]int{}
@@ -358,7 +358,7 @@ func (a *Handler) GetRateLimitStatus(r *http.Request) (interface{}, error) {
 			userSet[u] = struct{}{}
 		}
 	}
-	for _, userCfg := range ratelimit.GlobalLimiter.UserConfigs() {
+	for _, userCfg := range capacity.GlobalLimiter.UserConfigs() {
 		if userCfg.User != "" {
 			userSet[userCfg.User] = struct{}{}
 		}
@@ -371,8 +371,8 @@ func (a *Handler) GetRateLimitStatus(r *http.Request) (interface{}, error) {
 	sort.Strings(allUsers)
 
 	for _, u := range allUsers {
-		active, maxConcurrency := ratelimit.GlobalLimiter.ConcurrencyStats(u)
-		_, maxSandbox := ratelimit.GlobalLimiter.UserConfig(u)
+		active, maxConcurrency := capacity.GlobalLimiter.ConcurrencyStats(u)
+		_, maxSandbox := capacity.GlobalLimiter.UserConfig(u)
 		result.Users = append(result.Users, buildRateLimitStatus(u, true, active, maxConcurrency, counts[u], maxSandbox))
 	}
 

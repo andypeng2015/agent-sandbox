@@ -17,6 +17,7 @@
 package scaler
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/agent-sandbox/agent-sandbox/pkg/activator"
@@ -48,48 +49,54 @@ func (s *Scaler) ScalingDownOfIdleTimeout() {
 
 		// If no LastRequestTime event found, use creation time as fallback
 		if lastRequestTime == 0 {
-			createTime := sb.CreatedAt
-			lastRequestTime = createTime.Unix()
-			klog.V(2).Infof("Sandbox %v has no LastRequestTime event, using creation time %v", sb.Name, createTime)
+			//createTime := sb.CreatedAt
+			//lastRequestTime = createTime.Unix()
+			klog.Infof("Sandbox %v has no LastRequestTime event", sb.Name)
+			continue
 		}
 
 		// Calculate idle time
 		now := time.Now().Unix()
 		idleTime := now - lastRequestTime
-		idleTimeout := int64(sb.IdleTimeout)
+		sbxIdleTimeout := int64(sb.IdleTimeout)
 
 		klog.V(2).Infof("Sandbox %v idle check: lastRequestTime=%d, now=%d, idleTime=%d, idleTimeout=%d",
-			sb.Name, lastRequestTime, now, idleTime, idleTimeout)
+			sb.Name, lastRequestTime, now, idleTime, sbxIdleTimeout)
 
 		// Check if sandbox has been idle for longer than IdleTimeout
-		if idleTime > idleTimeout {
-			klog.Infof("Sandbox %s has been idle for %d seconds (threshold: %d seconds), triggering idle policy: %s",
-				sb.Name, idleTime, idleTimeout, sb.IdlePolicy)
-
-			// Execute idle policy
-			if err := s.executeIdlePolicy(sb); err != nil {
-				klog.Errorf("Failed to execute idle policy for sandbox %v, error %v", sb.Name, err)
-				continue
-			}
-
-			// Record event
-			r := activator.GetRecorder(s.rootCtx)
-			obj := &v1.ReplicaSet{
-				TypeMeta: v1meta.TypeMeta{
-					Kind:       "ReplicaSet",
-					APIVersion: "apps/v1",
-				},
-				ObjectMeta: v1meta.ObjectMeta{
-					Name:      sb.Name,
-					Namespace: config.Cfg.SandboxNamespace,
-				},
-			}
-			r.Event(obj, corev1.EventTypeNormal, "ScaleDownIdleTimeout",
-				"Sandbox scaled down due to idle timeout")
-
-			klog.Infof("Scaled down sandbox %s due to idle timeout. IdleTime: %ds, IdleTimeout: %ds, IdlePolicy: %s",
-				sb.Name, idleTime, idleTimeout, sb.IdlePolicy)
+		if idleTime < sbxIdleTimeout {
+			continue
 		}
+
+		klog.Infof("Sandbox %s has been idle for %d seconds (threshold: %d seconds), triggering idle policy: %s",
+			sb.Name, idleTime, sbxIdleTimeout, sb.IdlePolicy)
+
+		// Execute idle policy
+		if err := s.executeIdlePolicy(sb); err != nil {
+			klog.Errorf("Failed to execute idle policy for sandbox %v, error %v", sb.Name, err)
+			continue
+		}
+
+		// Record event
+		r := activator.GetRecorder(s.rootCtx)
+		obj := &v1.ReplicaSet{
+			TypeMeta: v1meta.TypeMeta{
+				Kind:       "ReplicaSet",
+				APIVersion: "apps/v1",
+			},
+			ObjectMeta: v1meta.ObjectMeta{
+				Name:      sb.Name,
+				Namespace: config.Cfg.SandboxNamespace,
+			},
+		}
+		r.Event(obj, corev1.EventTypeWarning, "ScaleDownIdleTimeout",
+			fmt.Sprintf("Sandbox scaled down due to idle timeout. %d/%d", idleTime, sbxIdleTimeout))
+
+		klog.Infof("Scaled down sandbox %s due to idle timeout. IdleTime: %ds, IdleTimeout: %ds, IdlePolicy: %s",
+			sb.Name, idleTime, sbxIdleTimeout, sb.IdlePolicy)
+
+		// to reduce kube-apiserver pressure
+		time.Sleep(300 * time.Millisecond)
 	}
 }
 

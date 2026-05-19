@@ -23,8 +23,8 @@ import (
 
 	"github.com/agent-sandbox/agent-sandbox/pkg/activator"
 	e2bapi "github.com/agent-sandbox/agent-sandbox/pkg/api/e2b"
+	"github.com/agent-sandbox/agent-sandbox/pkg/capacity"
 	"github.com/agent-sandbox/agent-sandbox/pkg/config"
-	"github.com/agent-sandbox/agent-sandbox/pkg/ratelimit"
 	"github.com/agent-sandbox/agent-sandbox/pkg/router"
 	"github.com/agent-sandbox/agent-sandbox/pkg/sandbox"
 	"k8s.io/klog/v2"
@@ -48,7 +48,7 @@ func New(rootCtx context.Context, a *activator.Activator, c *sandbox.Controller)
 	}
 	ah.regHandlers()
 
-	ratelimit.Init(c)
+	capacity.Init(c)
 
 	// Wrap mux with api key auth middleware and global logging middleware
 	authMux := ApiKeyAuthMiddleware(mux)
