@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/agent-sandbox/agent-sandbox/pkg/activator"
+	"github.com/agent-sandbox/agent-sandbox/pkg/capacity"
 	"github.com/agent-sandbox/agent-sandbox/pkg/config"
 	"github.com/agent-sandbox/agent-sandbox/pkg/handler"
 	"github.com/agent-sandbox/agent-sandbox/pkg/sandbox"
@@ -112,6 +113,9 @@ func main() {
 		klog.Info("Starting pool syncer")
 		pl.StartPoolSyncing()
 	}()
+
+	// Start the capacity manager
+	capacity.Init(c)
 
 	klog.Info("Starting the api server")
 	apiServer := handler.New(rootCtx, a, c)

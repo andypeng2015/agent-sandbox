@@ -50,3 +50,8 @@ V0.5.0 - 2026-05-19
 - 改进：Sandbox环境变量，在Sandbox内通过环境变量获取Sandbox ID等信息；
 - 变更：移除未使用的Template Resources配置；
 --------------------------
+V0.6.0 - 2026-06-03
+- 新增：Pause/Resume功能，支持暂停和恢复沙箱实例，暂停后保留沙箱启动的后台命令快照，例如(`sbx = Sandbox.create(template="code-sandbox-template",timeout=50*60,lifecycle=SandboxLifecycle(on_timeout="pause", auto_resume=True)); sbx.commands.run("python -m http.server 8001", background=True, timeout=0)`)，恢复后自动拉起保留的后台命令快照；
+- 新增：UI Dashboard，综合展示沙箱创建的状态；
+- 改进：优化idle timeout回收性能，过滤掉不需要回收的沙箱；
+--------------------------

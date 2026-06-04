@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/agent-sandbox/agent-sandbox/pkg/activator"
 	"github.com/agent-sandbox/agent-sandbox/pkg/config"
 	"github.com/agent-sandbox/agent-sandbox/pkg/sandbox"
 	v1 "k8s.io/api/apps/v1"
@@ -30,6 +29,8 @@ import (
 )
 
 // ScalingDownOfIdleTimeout checks sandboxes for idle timeout and deletes them if necessary
+// TODO 1, record last active(e.g. in 2 minute) sandboxes and skip them reduce pressure on kube-apiserver;
+// TODO 2, use lease to instead of event to record last request time, which is more efficient and can avoid pressure on kube-apiserver
 func (s *Scaler) ScalingDownOfIdleTimeout() {
 	sbs, err := s.controller.ListAll()
 	if err != nil {
@@ -40,7 +41,26 @@ func (s *Scaler) ScalingDownOfIdleTimeout() {
 	for _, sb := range sbs {
 		// Skip if IdleTimeout is not configured (0 or negative)
 		if sb.IdleTimeout <= 0 {
-			klog.V(2).Infof("Sandbox %v IdleTimeout is %d, skipping idle timeout check", sb.Name, sb.IdleTimeout)
+			continue
+		}
+
+		// Skip paused, and creating less than 5 minutes sandboxes
+		if sb.Status == sandbox.Paused {
+			continue
+		}
+		if time.Since(sb.CreatedAt) < ScalingCheckInterval {
+			continue
+		}
+
+		// Calculate idle time
+		now := time.Now().Unix()
+		sbxIdleTimeout := int64(sb.IdleTimeout)
+
+		// Skip if idleTimeout is not reached with created time,
+		//since last-request-time be greater than created time
+		if now-sb.CreatedAt.Unix() < sbxIdleTimeout {
+			klog.V(2).Infof("Sandbox %v is not idle yet with createdAt: %v, idle: %v/%d",
+				sb.Name, sb.CreatedAt, now-sb.CreatedAt.Unix(), sbxIdleTimeout)
 			continue
 		}
 
@@ -49,16 +69,11 @@ func (s *Scaler) ScalingDownOfIdleTimeout() {
 
 		// If no LastRequestTime event found, use creation time as fallback
 		if lastRequestTime == 0 {
-			//createTime := sb.CreatedAt
-			//lastRequestTime = createTime.Unix()
-			klog.Infof("Sandbox %v has no LastRequestTime event", sb.Name)
-			continue
+			klog.Warningf("Sandbox %v has no LastRequestTime event, use Created time", sb.Name)
+			lastRequestTime = sb.CreatedAt.Unix()
 		}
 
-		// Calculate idle time
-		now := time.Now().Unix()
 		idleTime := now - lastRequestTime
-		sbxIdleTimeout := int64(sb.IdleTimeout)
 
 		klog.V(2).Infof("Sandbox %v idle check: lastRequestTime=%d, now=%d, idleTime=%d, idleTimeout=%d",
 			sb.Name, lastRequestTime, now, idleTime, sbxIdleTimeout)
@@ -68,17 +83,30 @@ func (s *Scaler) ScalingDownOfIdleTimeout() {
 			continue
 		}
 
-		klog.Infof("Sandbox %s has been idle for %d seconds (threshold: %d seconds), triggering idle policy: %s",
-			sb.Name, idleTime, sbxIdleTimeout, sb.IdlePolicy)
-
-		// Execute idle policy
-		if err := s.executeIdlePolicy(sb); err != nil {
-			klog.Errorf("Failed to execute idle policy for sandbox %v, error %v", sb.Name, err)
-			continue
+		reason := "SandboxDeleted"
+		message := fmt.Sprintf("Sandbox deleted due to idle timeout. %d/%d", idleTime, sbxIdleTimeout)
+		if sb.AutoPause && config.CheckFeature(config.Cfg.PauseResume, sb.User) {
+			if err := s.controller.Pause(sb, "idleTimeout"); err != nil {
+				klog.Errorf("Failed to pause sandbox %v, error %v", sb.Name, err)
+				reason = "SandboxPauseFailed"
+				message = fmt.Sprintf("Failed to pause sandbox due to idle timeout. %d/%d, error: %v", idleTime, sbxIdleTimeout, err)
+			} else {
+				reason = "SandboxPaused"
+				message = fmt.Sprintf("Sandbox paused due to idle timeout. %d/%d", idleTime, sbxIdleTimeout)
+				klog.Infof("Paused sandbox %s due to idle timeout. IdleTime: %ds, IdleTimeout: %ds", sb.Name, idleTime, sbxIdleTimeout)
+			}
+		} else {
+			klog.Infof("Sandbox %s has been idle for %d seconds (threshold: %d seconds), deleting sandbox",
+				sb.Name, idleTime, sbxIdleTimeout)
+			if err := s.controller.Delete(sb.Name); err != nil {
+				reason = "SandboxDeleteFailed"
+				message = fmt.Sprintf("Failed to delete sandbox due to idle timeout. %d/%d, error: %v", idleTime, sbxIdleTimeout, err)
+				klog.Errorf("Failed to execute idle policy for sandbox %v, error %v", sb.Name, err)
+			}
 		}
 
 		// Record event
-		r := activator.GetRecorder(s.rootCtx)
+		r := s.activator.Recorder()
 		obj := &v1.ReplicaSet{
 			TypeMeta: v1meta.TypeMeta{
 				Kind:       "ReplicaSet",
@@ -89,29 +117,9 @@ func (s *Scaler) ScalingDownOfIdleTimeout() {
 				Namespace: config.Cfg.SandboxNamespace,
 			},
 		}
-		r.Event(obj, corev1.EventTypeWarning, "ScaleDownIdleTimeout",
-			fmt.Sprintf("Sandbox scaled down due to idle timeout. %d/%d", idleTime, sbxIdleTimeout))
+		r.Event(obj, corev1.EventTypeWarning, reason, message)
 
-		klog.Infof("Scaled down sandbox %s due to idle timeout. IdleTime: %ds, IdleTimeout: %ds, IdlePolicy: %s",
-			sb.Name, idleTime, sbxIdleTimeout, sb.IdlePolicy)
-
-		// to reduce kube-apiserver pressure
-		time.Sleep(300 * time.Millisecond)
-	}
-}
-
-// executeIdlePolicy executes the idle policy for a sandbox
-func (s *Scaler) executeIdlePolicy(sb *sandbox.Sandbox) error {
-	switch sb.IdlePolicy {
-	case "delete":
-		// Delete the sandbox
-		return s.controller.Delete(sb.Name)
-	case "scaledown":
-		// Scale down to 0 replicas (to be implemented if needed)
-		klog.Infof("ScaleDown policy for sandbox %s - to be implemented", sb.Name)
-		return nil
-	default:
-		// Default to delete
-		return s.controller.Delete(sb.Name)
+		// to reduce kube-apiserver pressure, QPS is 100, max 30000 can be handled per 5 minutes.
+		time.Sleep(10 * time.Millisecond)
 	}
 }

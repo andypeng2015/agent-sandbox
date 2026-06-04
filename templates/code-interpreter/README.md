@@ -17,3 +17,6 @@ docker push ghcr.io/agent-sandbox/code-interpreter:0.4.0
 
 ### envd
 build from https://github.com/e2b-dev/infra/
+
+## Change Log
+- 0.5.0: Fix the issue that the sandbox cannot output logs of Envd and Jupyter Server;

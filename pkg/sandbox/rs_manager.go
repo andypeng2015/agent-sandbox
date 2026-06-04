@@ -86,6 +86,11 @@ func (s *Controller) WaitForReplicaSetReady(sb *Sandbox) error {
 		}
 		// Check if the ReplicaSet is ready
 		replicas := *rsCreated.Spec.Replicas
+		if replicas == 0 {
+			klog.Infof("ReplicaSet %s in namespace %s has 0 desired replicas, retry get new ReplicaSet",
+				sb.Name, config.Cfg.SandboxNamespace)
+			return false, nil
+		}
 		if replicas == rsCreated.Status.ReadyReplicas {
 			klog.Infof("ReplicaSet %s in namespace %s is ready. Desired: %d, Ready: %d",
 				sb.Name, config.Cfg.SandboxNamespace, replicas, rsCreated.Status.ReadyReplicas)

@@ -1,1 +1,1 @@
-Please access the Agent-sandbox website https://agent-sandbox.github.io for more details about the project, including documentation, examples, and updates. 
+Please access the Agent-sandbox website https://agent-sandbox.github.io, including documentation, examples, and updates. 

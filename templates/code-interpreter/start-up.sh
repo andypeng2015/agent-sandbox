@@ -17,5 +17,11 @@ function start_jupyter_server() {
 	.venv/bin/uvicorn main:app --host 0.0.0.0 --port 49999 --workers 1 --no-access-log --no-use-colors --timeout-keep-alive 640
 }
 
-echo "Starting Code Interpreter server..."
-start_jupyter_server & /workspace/envd/envd >/dev/null 2>&1 & MATPLOTLIBRC=/root/.config/matplotlib/.matplotlibrc jupyter server --ip=0.0.0.0 --no-browser --IdentityProvider.token="" >/dev/null 2>&1
+echo "Starting Code Interpreter Server..."
+start_jupyter_server > /proc/1/fd/1 2>&1 &
+
+echo "Starting Envd..."
+/workspace/envd/envd > /proc/1/fd/1 2>&1 &
+
+echo "Starting Jupyter Server..."
+MATPLOTLIBRC=/root/.config/matplotlib/.matplotlibrc jupyter server --ip=0.0.0.0 --no-browser --IdentityProvider.token=""

@@ -1,6 +1,6 @@
 <div align="center">
   <picture >
-  <img alt="agent-sandbox" src="./docs/agentsandbox.png" width="240px" height="280px">
+  <img alt="agent-sandbox" src="./docs/imgs/agentsandbox.png" width="240px" height="280px">
   </picture>
 
   <p align="center"><b> Agent-Sandbox is an open-sourced <a href="https://docs.blaxel.ai/Sandboxes/Overview">Blaxel Sandbox</a> or <a href="https://e2b.dev/">E2B</a> like solution! </b>
@@ -21,7 +21,7 @@ Shell commands etc. with stateful, long-running, multi-session and multi-tenant.
 </div>
   <br/><br/>
 <div>
-<a href="docs/imgs/uiimg-sbs.png" target="_blank">
+<a href="docs/imgs/uiimg-sbxs.png" target="_blank">
     <img alt="agent-sandbox" src="docs/imgs/uiimg-sbxs.png" width="90%"/>
 </a>
 </div>
@@ -56,7 +56,7 @@ I found [kubernetes-sigs/agent-sandbox](https://github.com/kubernetes-sigs/agent
 So, We decide created this **Agent-Sandbox** project, which provides a RESTful API and MCP(Model Context Protocol) server to manage the sandbox lifecycle easily. It abstracts the complexity of Kubernetes and provides a simple interface for AI Agents and users to create, access, and delete sandboxes as needed. And we refer to some design ideas from [Blaxel Sandbox](https://docs.blaxel.ai/Sandboxes/Overview) and [E2B](https://e2b.dev/) provide similar features like lifecycle management and API design. Making it more suitable for AI Agents to use, but is opensource and self-hosted.
 
 ## Full sandbox lifecycle manage by Agent-Sandbox MCP Server
-![full-lifecycle-demo.png](docs/full-lifecycle-demo.png)
+![full-lifecycle-demo.png](docs/imgs/full-lifecycle-demo.png)
 
 ## Architecture
 ```mermaid
@@ -218,7 +218,7 @@ print(response.text)
 Now you can access to the previously created **sandbox-01** sandbox using `/sandbox/sandbox-01`.
 
 **You will see:**
-![aio-demo.jpg](docs/aio-demo.jpg)
+![aio-demo.jpg](docs/imgs/aio-demo.jpg)
 
 **Use agent sandbox SDK access this sandbox:**
 ```python

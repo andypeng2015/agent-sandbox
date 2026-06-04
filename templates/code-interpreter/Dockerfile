@@ -2,7 +2,8 @@ FROM e2bdev/code-interpreter:latest
  
 USER root
  
-COPY envd /workspace/envd
+COPY envd /workspace/envd/envd
+RUN chmod +x /workspace/envd/envd
 
 COPY warmup.sh /root/.server/warmup.sh
 RUN chmod +x /root/.server/warmup.sh

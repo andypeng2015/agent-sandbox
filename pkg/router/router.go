@@ -92,7 +92,6 @@ func (s *SandboxRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req.URL.Host = targetURL.Host
 		req.Host = targetURL.Host
 		req.URL.Path = strings.TrimPrefix(req.URL.Path, prefixToStrip)
-
 		klog.Info("Proxying request to sandbox ", "name=", name, " url=", req.Method, req.URL)
 		req.Header.Set("X-Request-ID", fmt.Sprintf("%d", time.Now().UnixNano()))
 	}

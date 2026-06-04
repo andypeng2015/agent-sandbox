@@ -61,6 +61,10 @@ func NewActivator(ctx context.Context) *Activator {
 	return a
 }
 
+func (a *Activator) Recorder() record.EventRecorder {
+	return a.recorder
+}
+
 func (a *Activator) RecordLastEvent(eventType string, name string) {
 	now := time.Now()
 	cacheKey := eventType + "/" + name

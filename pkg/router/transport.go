@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	sandboxProxyDialMaxAttempts = 10
+	sandboxProxyDialMaxAttempts = 6
 	sandboxProxyDialRetryDelay  = 500 * time.Millisecond
 )
 
@@ -37,9 +37,10 @@ func dialContextWithRetry(dialer *net.Dialer) func(context.Context, string, stri
 		var lastErr error
 		for attempt := 1; attempt <= sandboxProxyDialMaxAttempts; attempt++ {
 			conn, err := dialer.DialContext(ctx, network, address)
-			if err == nil || !isConnectionRefused(err) || attempt == sandboxProxyDialMaxAttempts {
+			if err == nil || !isConnectionRefused(err) {
 				return conn, err
 			}
+			klog.V(1).Infof("retry sandbox proxy dial attempt=%d network=%s address=%s error=%v", attempt, network, address, err)
 
 			lastErr = err
 			// The pod can have an IP before the sandbox service starts listening on its port.
@@ -48,7 +49,6 @@ func dialContextWithRetry(dialer *net.Dialer) func(context.Context, string, stri
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			}
-			klog.V(1).Infof("retry sandbox proxy dial attempt=%d network=%s address=%s error=%v", attempt, network, address, err)
 		}
 		return nil, lastErr
 	}
@@ -69,9 +69,9 @@ func getTransport() *http.Transport {
 
 		TLSHandshakeTimeout: 5 * time.Second,
 
-		ResponseHeaderTimeout: 300 * time.Second,
+		ResponseHeaderTimeout: 35 * time.Second,
 
-		MaxIdleConns:        100,
+		MaxIdleConns:        500,
 		MaxIdleConnsPerHost: 20,
 		IdleConnTimeout:     90 * time.Second,
 	}

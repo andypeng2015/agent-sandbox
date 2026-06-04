@@ -1,6 +1,7 @@
 const TOKEN_STORAGE_KEY = 'api-token'
 
 export type NavKey =
+  | 'dashboard'
   | 'sandboxes'
   | 'pool'
   | 'rateLimit'
@@ -12,7 +13,7 @@ export type NavKey =
   | 'runtimeConfig'
   | 'events'
 
-const DEFAULT_ALLOWED_NAVS: NavKey[] = ['sandboxes', 'pool', 'rateLimit', 'logs', 'terminal', 'files', 'events']
+const DEFAULT_ALLOWED_NAVS: NavKey[] = ['dashboard', 'sandboxes', 'pool', 'rateLimit', 'logs', 'terminal', 'files', 'events']
 
 export function canAccessNav(key: NavKey, token = getAuthToken()): boolean {
   if (token.startsWith('sys-')) {

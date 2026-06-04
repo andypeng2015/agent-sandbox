@@ -10,6 +10,7 @@ export default function AppShellLayout() {
   const [theme, setTheme] = useState<ThemeName>(getTheme())
   const token = getAuthToken()
 
+  const canViewDashboard = canAccessNav('dashboard', token)
   const canViewSandboxes = canAccessNav('sandboxes', token)
   const canViewPool = canAccessNav('pool', token)
   const canViewRateLimit = canAccessNav('rateLimit', token)
@@ -82,6 +83,14 @@ export default function AppShellLayout() {
 
             <ul className="menu w-full p-0">
                 <li></li>
+                {canViewDashboard && (
+                  <li>
+                      <NavLink to="/dashboard"
+                               className={({isActive}) => (isActive ? 'menu-active text-left' : 'text-left')}>
+                          Dashboard
+                      </NavLink>
+                  </li>
+                )}
                 {canViewSandboxes && (
                   <li>
                       <NavLink to="/sandboxes"

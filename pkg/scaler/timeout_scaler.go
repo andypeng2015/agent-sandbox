@@ -19,8 +19,8 @@ package scaler
 import (
 	"time"
 
-	"github.com/agent-sandbox/agent-sandbox/pkg/activator"
 	"github.com/agent-sandbox/agent-sandbox/pkg/config"
+	"github.com/agent-sandbox/agent-sandbox/pkg/sandbox"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,18 +35,47 @@ func (s *Scaler) ScalingDownOfTimeout() {
 	}
 
 	for _, sb := range sbs {
-		createT := sb.CreatedAt
+		baseTime := sb.CreatedAt
+		if resumedAt := sb.ReplicaSet.Annotations[sandbox.AnnotationResumedAt]; resumedAt != "" {
+			if t, err := time.Parse(time.RFC3339, resumedAt); err == nil {
+				baseTime = t
+			}
+		}
+
 		timeout := sb.Timeout
 		if timeout <= 0 {
 			continue
 		}
-		tt := createT.Add(time.Duration(timeout) * time.Second)
+
+		if sb.Status == sandbox.Paused {
+			continue
+		}
+
+		if time.Since(baseTime) < ScalingCheckInterval {
+			continue
+		}
+
+		tt := baseTime.Add(time.Duration(timeout) * time.Second)
 		if tt.Before(time.Now()) {
-			if err := s.controller.Delete(sb.Name); err != nil {
-				klog.Errorf("Failed to scale down sandbox %v, error %v", sb, err)
-				continue
+			reason := "SandboxDeleted"
+			message := "Sandbox deleted due to timeout"
+			if sb.AutoPause && config.CheckFeature(config.Cfg.PauseResume, sb.User) {
+				if err := s.controller.Pause(sb, "timeout"); err != nil {
+					klog.Errorf("Failed to pause sandbox %v, error %v", sb, err)
+					continue
+				}
+				reason = "SandboxPaused"
+				message = "Sandbox paused due to timeout"
+				klog.Infof("Paused sandbox %s TimeoutBase %s Timeout %v", sb.Name, baseTime, sb.Timeout)
+			} else {
+				if err := s.controller.Delete(sb.Name); err != nil {
+					klog.Errorf("Failed to scale down sandbox %v, error %v", sb, err)
+					continue
+				}
+				klog.Infof("Scaled down sandbox %s TimeoutBase %s Timeout %v IdleTimeout %v", sb.Name, baseTime, sb.Timeout, sb.IdleTimeout)
 			}
-			r := activator.GetRecorder(s.rootCtx)
+
+			r := s.activator.Recorder()
 			obj := &v1.ReplicaSet{
 				TypeMeta: v1meta.TypeMeta{
 					Kind:       "ReplicaSet",
@@ -57,11 +86,10 @@ func (s *Scaler) ScalingDownOfTimeout() {
 					Namespace: config.Cfg.SandboxNamespace,
 				},
 			}
-			r.Event(obj, corev1.EventTypeWarning, "ScaleDownTimeout", "Sandbox scaled down due to timeout")
-			klog.Infof("Scaled down sandbox %s CreationTimestamp %s Timeout %v IdleTimeout %v", sb.Name, sb.CreatedAt, sb.Timeout, sb.IdleTimeout)
+			r.Event(obj, corev1.EventTypeWarning, reason, message)
 
-			// to reduce kube-apiserver pressure
-			time.Sleep(300 * time.Millisecond)
+			// to reduce kube-apiserver pressure, QPS not over 100
+			time.Sleep(10 * time.Millisecond)
 		}
 
 	}

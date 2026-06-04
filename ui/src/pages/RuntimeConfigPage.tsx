@@ -55,6 +55,16 @@ function formatJsonArray(value: string): string {
   }
 }
 
+// Convert comma-separated tokens to newline-separated for display
+function formatApiTokensRaw(value: string): string {
+  return value.trim().replace(/,/g, '\n')
+}
+
+// Convert newline-separated tokens back to comma-separated for saving
+function normalizeApiTokensRaw(value: string): string {
+  return value.split('\n').map((t) => t.trim()).filter(Boolean).join(',')
+}
+
 function toRuntimeConfigPayload(draft: RuntimeConfigDraft): RuntimeConfigPayload {
   const rateLimitUsersRaw = draft.rate_limit_users_raw.trim()
   if (rateLimitUsersRaw !== '') {
@@ -74,7 +84,7 @@ function toRuntimeConfigPayload(draft: RuntimeConfigDraft): RuntimeConfigPayload
 
   return {
     system_token: draft.system_token.trim(),
-    api_tokens_raw: draft.api_tokens_raw.trim(),
+    api_tokens_raw: normalizeApiTokensRaw(draft.api_tokens_raw),
     rate_limit: {
       enabled: draft.rate_limit.enabled,
       max_concurrency: maxConcurrency,
@@ -98,6 +108,7 @@ export default function RuntimeConfigPage() {
     setRuntimeConfig({
       ...emptyRuntimeConfig,
       ...data,
+      api_tokens_raw: formatApiTokensRaw(data.api_tokens_raw),
       api_tokens: Array.isArray(data.api_tokens) ? data.api_tokens : [],
       rate_limit_users_raw: formatJsonArray(data.rate_limit_users_raw),
       rate_limit_users: Array.isArray(data.rate_limit_users) ? data.rate_limit_users : [],
@@ -263,13 +274,13 @@ export default function RuntimeConfigPage() {
 
               <label className="form-control w-full md:col-span-2">
                 <div className="label">
-                  <span className="label-text">API Tokens Raw</span>
+                  <span className="label-text">API Tokens Raw  (One per line)</span>
                 </div>
                 <textarea
-                  className="textarea textarea-sm textarea-bordered min-h-[110px] w-full font-mono text-xs"
+                  className="textarea textarea-sm textarea-bordered min-h-[400px] w-full font-mono text-xs"
                   value={runtimeConfig.api_tokens_raw}
                   onChange={(event) => updateRuntimeConfig((prev) => ({ ...prev, api_tokens_raw: event.target.value }))}
-                  placeholder="token-a,token-b"
+                  placeholder="token-a&#10;token-b"
                 />
               </label>
 
@@ -352,10 +363,10 @@ export default function RuntimeConfigPage() {
               <h4 className="text-sm font-semibold text-base-content/70">Users Config</h4>
               <label className="form-control w-full">
                 <div className="label">
-                  <span className="label-text">Users Raw</span>
+                  <span className="label-text">Users Capacity Raw</span>
                 </div>
                 <textarea
-                  className="textarea textarea-sm textarea-bordered min-h-[180px] w-full font-mono text-xs"
+                  className="textarea textarea-sm textarea-bordered min-h-[500px] w-full font-mono text-xs"
                   value={runtimeConfig.rate_limit_users_raw}
                   onChange={(event) => updateRuntimeConfig((prev) => ({ ...prev, rate_limit_users_raw: event.target.value }))}
                   placeholder='[{"user":"token-a","max_concurrency":10,"max_sandbox":100}]'

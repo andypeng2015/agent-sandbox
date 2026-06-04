@@ -33,19 +33,19 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const Version = "0.5.0"
+const Version = "0.6.0"
 
 var Cfg *Config
 var Templates []*Template
 var SandboxDeployTemplate string
 
 type RuntimeConfig struct {
-	SystemToken            *string          `json:"system_token,omitempty"`
-	APITokensRaw           *string          `json:"api_tokens_raw,omitempty"`
-	RateLimit              *RateLimitConfig `json:"rate_limit,omitempty"`
-	RateLimitUsersRaw      *string          `json:"rate_limit_users_raw,omitempty"`
-	SandboxDefaultImage    *string          `json:"sandbox_default_image,omitempty"`
-	SandboxDefaultTemplate *string          `json:"sandbox_default_template,omitempty"`
+	SystemToken            *string          `split_words:"true" required:"false" json:"system_token,omitempty"`
+	APITokensRaw           *string          `split_words:"true" required:"false" json:"api_tokens_raw,omitempty"`
+	RateLimit              *RateLimitConfig `split_words:"true" required:"false" json:"rate_limit,omitempty"`
+	RateLimitUsersRaw      *string          `split_words:"true" required:"false" json:"rate_limit_users_raw,omitempty"`
+	SandboxDefaultImage    *string          `split_words:"true" required:"false" json:"sandbox_default_image,omitempty"`
+	SandboxDefaultTemplate *string          `split_words:"true" required:"false" json:"sandbox_default_template,omitempty"`
 }
 
 type Config struct {
@@ -76,6 +76,9 @@ type Config struct {
 	APITokensRaw      string `split_words:"true" default:"testuser-aef134ef-7aa1-945e-9399-7df9a4ad0c3f" required:"false"`
 	RateLimitUsersRaw string `split_words:"true" required:"false"`
 
+	RuntimeConfig
+	FeatureConfig
+
 	// Runtime config snapshots are read concurrently by request handlers.
 	runtimeMu           sync.RWMutex `ignored:"true"`
 	apiTokensValue      atomic.Value `ignored:"true"`
@@ -84,6 +87,8 @@ type Config struct {
 }
 
 func InitConfig() *Config {
+	loadEnvFile()
+
 	var cfg Config
 	if err := envconfig.Process("", &cfg); err != nil {
 		klog.Fatal("Failed to process config: ", err)

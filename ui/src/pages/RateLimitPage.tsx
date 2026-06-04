@@ -18,6 +18,17 @@ function formatLimit(value: number): string {
   return value > 0 ? String(value) : 'Unlimited'
 }
 
+// Format user key to show first two segments
+function formatUserDisplay(value?: string): string {
+  const key = value?.trim()
+  if (!key) {
+    return '-'
+  }
+
+  const parts = key.split('-').filter(Boolean)
+  return parts.length >= 2 ? `${parts[0]}-${parts[1]}...` : key
+}
+
 function formatUsagePercent(user: RateLimitUserStatus): string {
   if (user.sandbox_max <= 0) {
     return '-'
@@ -206,7 +217,7 @@ export default function RateLimitPage() {
                       return (
                         <tr key={user.user || `user-${index}`}>
                           <td>{index + 1}</td>
-                          <td className="font-medium">{user.user || '-'}</td>
+                          <td className="font-medium">{formatUserDisplay(user.user)}</td>
                           <td className="text-center">
                             <div className="badge badge-secondary badge-sm">
                               {user.concurrency_active} / {formatLimit(user.concurrency_max)}

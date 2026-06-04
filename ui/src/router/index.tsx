@@ -2,6 +2,7 @@ import { Navigate, Outlet, createHashRouter } from 'react-router-dom'
 
 import AppShellLayout from '../layouts/AppShellLayout'
 import { hasAuthToken } from '../lib/auth/token'
+import DashboardPage from '../pages/DashboardPage'
 import EventsPage from '../pages/EventsPage'
 import FilesPage from '../pages/FilesPage'
 import LoginPage from '../pages/LoginPage'
@@ -24,7 +25,7 @@ function RequireAuth() {
 
 function RedirectIfAuthed() {
   if (hasAuthToken()) {
-    return <Navigate to="/sandboxes" replace />
+    return <Navigate to="/dashboard" replace />
   }
   return <LoginPage />
 }
@@ -43,7 +44,11 @@ export const appRouter = createHashRouter([
         children: [
           {
             index: true,
-            element: <Navigate to="sandboxes" replace />,
+            element: <Navigate to="dashboard" replace />,
+          },
+          {
+            path: 'dashboard',
+            element: <DashboardPage />,
           },
           {
             path: 'sandboxes',
@@ -95,6 +100,6 @@ export const appRouter = createHashRouter([
   },
   {
     path: '*',
-    element: <Navigate to="/sandboxes" replace />,
+    element: <Navigate to="/dashboard" replace />,
   },
 ])

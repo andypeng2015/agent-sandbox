@@ -31,11 +31,8 @@ const (
 
 // Defines values for SandboxState.
 const (
-	Paused   SandboxState = "paused"
-	Running  SandboxState = "running"
-	Creating SandboxState = "creating"
-	Ready    SandboxState = "ready"
-	Unready  SandboxState = "unready"
+	Paused  SandboxState = "paused"
+	Running SandboxState = "running"
 )
 
 // Defines values for TemplateBuildStatus.
@@ -300,8 +297,12 @@ type NewSandbox struct {
 	AllowInternetAccess *bool `json:"allow_internet_access,omitempty"`
 
 	// AutoPause Automatically pauses the sandbox after the timeout
-	AutoPause *bool             `json:"autoPause,omitempty"`
-	EnvVars   map[string]string `json:"envVars,omitempty"`
+	AutoPause *bool `json:"autoPause,omitempty"`
+
+	// AutoResume Auto-resume configuration for paused sandboxes.
+	AutoResume *SandboxAutoResumeConfig `json:"autoResume,omitempty"`
+
+	EnvVars map[string]string `json:"envVars,omitempty"`
 
 	// Mcp MCP configuration for the sandbox
 	Mcp      *Mcp                  `json:"mcp"`
@@ -315,7 +316,56 @@ type NewSandbox struct {
 	TemplateID string `json:"templateID"`
 
 	// Timeout Time to live for the sandbox in seconds.
+	// SDK default is 300 seconds if not set, 0 or -1 is no timeout.
 	Timeout int `json:"timeout,omitempty"`
+}
+
+// SandboxAutoResumeConfig Auto-resume configuration for paused sandboxes.
+type SandboxAutoResumeConfig struct {
+	// Enabled Auto-resume enabled flag for paused sandboxes. Default false.
+	Enabled bool `json:"enabled"`
+}
+
+// SandboxAutoResumeEnabled Auto-resume enabled flag for paused sandboxes. Default false.
+type SandboxAutoResumeEnabled = bool
+
+// Defines values for SandboxOnTimeout.
+const (
+	Kill  SandboxOnTimeout = "kill"
+	Pause SandboxOnTimeout = "pause"
+)
+
+// Valid indicates whether the value is a known member of the SandboxOnTimeout enum.
+func (e SandboxOnTimeout) Valid() bool {
+	switch e {
+	case Kill:
+		return true
+	case Pause:
+		return true
+	default:
+		return false
+	}
+}
+
+// Valid indicates whether the value is a known member of the SandboxState enum.
+func (e SandboxState) Valid() bool {
+	switch e {
+	case Paused:
+		return true
+	case Running:
+		return true
+	default:
+		return false
+	}
+}
+
+// SandboxLifecycle Sandbox lifecycle policy returned by sandbox info.
+type SandboxLifecycle struct {
+	// AutoResume Whether the sandbox can auto-resume.
+	AutoResume bool `json:"autoResume"`
+
+	// OnTimeout Action taken when the sandbox times out.
+	OnTimeout SandboxOnTimeout `json:"onTimeout"`
 }
 
 // NewTeamAPIKey defines model for NewTeamAPIKey.
@@ -461,6 +511,9 @@ type Sandbox struct {
 	// EnvdVersion Version of the envd running in the sandbox
 	EnvdVersion EnvdVersion `json:"envdVersion,omitempty"`
 
+	// Lifecycle Sandbox lifecycle policy returned by sandbox info.
+	Lifecycle *SandboxLifecycle `json:"lifecycle,omitempty"`
+
 	// SandboxID Identifier of the sandbox
 	SandboxID string `json:"sandboxID"`
 
@@ -571,6 +624,9 @@ type SandboxNetworkConfig struct {
 
 // SandboxState State of the sandbox
 type SandboxState string
+
+// SandboxOnTimeout Action taken when the sandbox times out.
+type SandboxOnTimeout string
 
 // SandboxesWithMetrics defines model for SandboxesWithMetrics.
 type SandboxesWithMetrics struct {

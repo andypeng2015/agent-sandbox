@@ -102,20 +102,27 @@ func (s *Controller) Get(name string) (*Sandbox, error) {
 }
 
 func (s *Controller) GetSandbox(rs *v1.ReplicaSet) (*Sandbox, error) {
-	raw := rs.Annotations["sandbox-data"]
+	raw := rs.Annotations[AnnotationSandboxData]
 	sb := &Sandbox{}
 	json.Unmarshal([]byte(raw), sb)
 	sb.ReplicaSet = rs.DeepCopy()
-
-	// Set the status of the sandbox
-	replicas := *rs.Spec.Replicas
-	if replicas == rs.Status.ReadyReplicas {
-		sb.Status = Running
-	} else {
-		sb.Status = Creating
-	}
+	sb.Status = deriveSandboxStatus(rs)
 
 	return sb, nil
+}
+
+func deriveSandboxStatus(rs *v1.ReplicaSet) SandboxState {
+	replicas := int32(0)
+	if rs.Spec.Replicas != nil {
+		replicas = *rs.Spec.Replicas
+	}
+	if rs.Annotations[AnnotationPaused] == "true" && replicas == 0 {
+		return Paused
+	}
+	if replicas > 0 && replicas == rs.Status.ReadyReplicas {
+		return Running
+	}
+	return Creating
 }
 
 func (s *Controller) ListPoolByNames(names []string) ([]*Sandbox, error) {
@@ -166,17 +173,11 @@ func (s *Controller) DoList(selector labels.Selector) ([]*Sandbox, error) {
 	}
 	var sandboxes = []*Sandbox{}
 	for _, rs := range rss {
-		raw := rs.Annotations["sandbox-data"]
+		raw := rs.Annotations[AnnotationSandboxData]
 		sb := &Sandbox{}
 		json.Unmarshal([]byte(raw), sb)
 		sb.ReplicaSet = rs.DeepCopy()
-		// Set the status of the sandbox
-		replicas := *rs.Spec.Replicas
-		if replicas == rs.Status.ReadyReplicas {
-			sb.Status = Running
-		} else {
-			sb.Status = Creating
-		}
+		sb.Status = deriveSandboxStatus(rs)
 
 		sandboxes = append(sandboxes, sb)
 	}

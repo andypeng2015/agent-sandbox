@@ -23,7 +23,6 @@ import (
 
 	"github.com/agent-sandbox/agent-sandbox/pkg/activator"
 	e2bapi "github.com/agent-sandbox/agent-sandbox/pkg/api/e2b"
-	"github.com/agent-sandbox/agent-sandbox/pkg/capacity"
 	"github.com/agent-sandbox/agent-sandbox/pkg/config"
 	"github.com/agent-sandbox/agent-sandbox/pkg/router"
 	"github.com/agent-sandbox/agent-sandbox/pkg/sandbox"
@@ -48,8 +47,6 @@ func New(rootCtx context.Context, a *activator.Activator, c *sandbox.Controller)
 	}
 	ah.regHandlers()
 
-	capacity.Init(c)
-
 	// Wrap mux with api key auth middleware and global logging middleware
 	authMux := ApiKeyAuthMiddleware(mux)
 	loggedMux := LoggingMiddleware(authMux)
@@ -72,6 +69,8 @@ func (ahh *ApiHttpHandler) regHandlers() {
 	ahh.mux.HandleFunc(fmt.Sprintf("POST %s/sandbox", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.CreateSandbox) })
 	ahh.mux.HandleFunc(fmt.Sprintf("GET %s/sandbox", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.ListSandbox) })
 	ahh.mux.HandleFunc(fmt.Sprintf("DELETE %s/sandbox/{name}", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.DelSandbox) })
+	ahh.mux.HandleFunc(fmt.Sprintf("POST %s/sandbox/pause/{name}", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.PauseSandbox) })
+	ahh.mux.HandleFunc(fmt.Sprintf("POST %s/sandbox/resume/{name}", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.ResumeSandbox) })
 	ahh.mux.HandleFunc(fmt.Sprintf("GET %s/sandbox/{name}", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.GetSandbox) })
 	ahh.mux.HandleFunc(fmt.Sprintf("POST %s/sandbox/metrics", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.SandboxMetrics) })
 	ahh.mux.HandleFunc(fmt.Sprintf("GET %s/ratelimit", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.GetRateLimitStatus) })
@@ -104,7 +103,7 @@ func (ahh *ApiHttpHandler) regHandlers() {
 	e2bHeader := e2bapi.NewHandler(ahh.rootCtx, c, a)
 	e2bHeader.RegisterHandlersWithOptions(ahh.mux)
 
-	// SandboxHandler router, route calls to Sandbox container
+	// SandboxHandler router, route calls to Sandbox container(proxy)
 	srHandler := router.NewSandboxRouter(ahh.rootCtx, a)
 	ahh.mux.HandleFunc("/sandbox/{name}/", srHandler.ServeHTTP)
 
@@ -126,7 +125,7 @@ func (ahh *ApiHttpHandler) regHandlers() {
 	// e2b sandbox execute endpoint
 	ahh.mux.HandleFunc("/sandboxes/router/{sandboxID}/{port}/", e2bHeader.SandboxRouterOfPath())
 	// catch-all handler for any unmatched requests, mainly for E2B sandbox proxy purpose
-	ahh.mux.HandleFunc("/", e2bHeader.SandboxRouterNative())
+	ahh.mux.HandleFunc("/", e2bHeader.SandboxRouterOfDomain())
 }
 
 func wrapperHandler(w http.ResponseWriter, r *http.Request, f func(*http.Request) (interface{}, error)) {

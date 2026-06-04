@@ -25,6 +25,10 @@ import (
 	"k8s.io/klog/v2"
 )
 
+const (
+	ScalingCheckInterval = 5 * time.Minute
+)
+
 type Scaler struct {
 	rootCtx    context.Context
 	activator  *activator.Activator
@@ -42,7 +46,7 @@ func NewScaler(ctx context.Context, a *activator.Activator, c *sandbox.Controlle
 
 func (s *Scaler) RunScaling() {
 	// Periodically check for sandboxes to scale down
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(ScalingCheckInterval)
 	defer ticker.Stop()
 	for {
 		select {

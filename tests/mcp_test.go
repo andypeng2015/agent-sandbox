@@ -18,12 +18,16 @@ package tests_test
 
 //Test CreateRecorder
 import (
+	"fmt"
 	"log"
 	"testing"
 
 	"context"
 
+	"github.com/agent-sandbox/agent-sandbox/pkg/utils"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	kubeclient "knative.dev/pkg/client/injection/kube/client"
+	"knative.dev/pkg/injection"
 )
 
 func getSession() *mcp.ClientSession {
@@ -131,6 +135,29 @@ func TestGET(t *testing.T) {
 	}
 
 	log.Println("Client completed successfully")
+}
+
+func TestExec(t *testing.T) {
+	cmd := []string{
+		"sh",
+		"-c",
+		fmt.Sprintf("curl -s -o /dev/null  http://127.0.0.1:%d/hello", 8080),
+	}
+
+	rootCtx, _ := context.WithCancel(context.Background())
+	kubecfg := injection.ParseAndGetRESTConfigOrDie()
+
+	rootCtx = injection.WithNamespaceScope(rootCtx, "ymcas")
+	rootCtx, _ = injection.Default.SetupInformers(rootCtx, kubecfg)
+
+	kubeClient := kubeclient.Get(rootCtx)
+
+	stdout, stderr, err := utils.ExecCommand(kubeClient, kubecfg, "ymcas", "sbx-template-demo-f1523dbe531240af83bb-zhp9m", "sandbox", cmd)
+
+	log.Println("exec result err: ", err)
+	log.Println("exec result stderr: ", stderr)
+	log.Println("exec result stdout: ", stdout)
+
 }
 
 func TestDEL(t *testing.T) {

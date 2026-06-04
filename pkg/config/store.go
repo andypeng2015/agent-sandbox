@@ -20,21 +20,21 @@ func WatchConfigMap() func(configMap *corev1.ConfigMap) {
 	return func(configMap *corev1.ConfigMap) {
 		templatesContent := configMap.Data[TemplatesConfigMapKey]
 		if templatesContent != "" && templatesContent != lastTemplatesContent {
-			klog.Info("watching ConfigMap changed, templates content updated")
+			klog.Info("watching ConfigMap changed, templates content updated, content=", templatesContent)
 			Cfg.ShouldLoadTemplates(templatesContent)
 			lastTemplatesContent = templatesContent
 		}
 
 		sandboxTemplateContent := configMap.Data[SandboxTemplateConfigMapKey]
 		if sandboxTemplateContent != "" && sandboxTemplateContent != lastSandboxTemplateContent {
-			klog.Info("watching ConfigMap changed, sandbox template content updated")
+			klog.Info("watching ConfigMap changed, sandbox template content updated, content=", sandboxTemplateContent)
 			SandboxDeployTemplate = sandboxTemplateContent
 			lastSandboxTemplateContent = sandboxTemplateContent
 		}
 
 		runtimeConfigContent, ok := configMap.Data[RuntimeConfigMapKey]
 		if ok && runtimeConfigContent != "" && runtimeConfigContent != lastRuntimeConfigContent {
-			klog.Info("watching ConfigMap changed, runtime config updated")
+			klog.Info("watching ConfigMap changed, runtime config updated, content=", runtimeConfigContent)
 			Cfg.ApplyRuntimeConfigContent(runtimeConfigContent)
 			lastRuntimeConfigContent = runtimeConfigContent
 		}

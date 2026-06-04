@@ -285,6 +285,44 @@ func (a *Handler) DelSandbox(r *http.Request) (interface{}, error) {
 	return fmt.Sprintf("Sandbox %s deleted successfully", name), nil
 }
 
+func (a *Handler) PauseSandbox(r *http.Request) (interface{}, error) {
+	name := r.PathValue("name")
+	if name == "" {
+		return nil, fmt.Errorf("sandbox name is required")
+	}
+
+	klog.V(2).Infof("Pause sandbox name=%s", name)
+
+	sb, err := a.controller.Get(name)
+	if err != nil {
+		return nil, fmt.Errorf("sandbox %s not found", name)
+	}
+	if err := a.controller.Pause(sb, "api"); err != nil {
+		return nil, fmt.Errorf("failed to pause sandbox %s: %v", name, err)
+	}
+
+	return fmt.Sprintf("Sandbox %s paused successfully", name), nil
+}
+
+func (a *Handler) ResumeSandbox(r *http.Request) (interface{}, error) {
+	name := r.PathValue("name")
+	if name == "" {
+		return nil, fmt.Errorf("sandbox name is required")
+	}
+
+	klog.V(2).Infof("Resume sandbox name=%s", name)
+
+	sb, err := a.controller.Get(name)
+	if err != nil {
+		return nil, fmt.Errorf("sandbox %s not found", name)
+	}
+	if err := a.controller.Resume(sb, "api"); err != nil {
+		return nil, fmt.Errorf("failed to resume sandbox %s: %v", name, err)
+	}
+
+	return fmt.Sprintf("Sandbox %s resumed successfully", name), nil
+}
+
 type RateLimitStatus struct {
 	User                string `json:"user,omitempty"`
 	ConcurrencyActive   int    `json:"concurrency_active"`

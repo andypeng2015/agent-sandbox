@@ -50,3 +50,8 @@ V0.5.0 - 2026-05-19
 - Improve: sandbox environment variables, allowing sandbox ID and related information to be accessed from inside the sandbox through environment variables.
 - Change: remove unused Template Resources config.
 --------------------------
+V0.6.0 - 2026-06-03
+- Add: Pause/Resume feature, supporting pausing and resuming sandbox instances. When paused, background command snapshots are preserved (e.g., `sbx = Sandbox.create(template="code-sandbox-template", timeout=50*60, lifecycle=SandboxLifecycle(on_timeout="pause", auto_resume=True)); sbx.commands.run("python -m http.server 8001", background=True, timeout=0)`). Upon resume, preserved background command snapshots are automatically re-start.
+- Add: UI Dashboard, providing a comprehensive view of sandbox creation status.
+- Improve: optimize idle timeout reclamation performance by filtering out sandboxes that don't need reclamation.
+--------------------------

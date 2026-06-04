@@ -28,13 +28,12 @@ import (
 
 // Defines values for SandboxState.
 type SandboxState string
+type SandboxOnTimeout string
 
 const (
 	Paused   SandboxState = "paused"
 	Running  SandboxState = "running"
 	Creating SandboxState = "creating"
-	Ready    SandboxState = "ready"
-	Unready  SandboxState = "unready"
 )
 
 const (
@@ -42,6 +41,16 @@ const (
 	DefaultMemory      = "500Mi"
 	DefaultCPULimit    = "1000m"
 	DefaultMemoryLimit = "2000Mi"
+)
+
+const (
+	AnnotationSandboxData     = "sandbox-data"
+	AnnotationPaused          = "agent-sandbox.github.io/paused"
+	AnnotationPausedAt        = "agent-sandbox.github.io/paused-at"
+	AnnotationPauseReason     = "agent-sandbox.github.io/pause-reason"
+	AnnotationResumedAt       = "agent-sandbox.github.io/resumed-at"
+	AnnotationResumeReason    = "agent-sandbox.github.io/resume-reason"
+	AnnotationProcessSnapshot = "agent-sandbox.github.io/process-snapshot"
 )
 
 type SandboxBase struct {
@@ -87,14 +96,17 @@ type Sandbox struct {
 	// Environment variables to set in the SandboxHandler.
 	EnvVars map[string]string `json:"envVars,omitempty"`
 
-	// Maximum lifetime of the sandbox in seconds. timeout is reached apply to delete action
+	// Maximum lifetime of the sandbox in seconds.
 	Timeout int `json:"timeout,omitempty" default:"1800"` // default 30m, -1 is no timeout
 
 	// The amount of time in seconds that a sandbox can be idle before being terminated.
 	IdleTimeout int `json:"idle_timeout,omitempty"` // default 10m, -1 is no timeout
 
-	// Policy to apply when the idle is reached. Options are 'delete' or 'scaledown'.
-	IdlePolicy string `json:"idle_policy,omitempty" default:"delete"` // default delete
+	// AutoPause Automatically pauses the sandbox after the timeout
+	AutoPause bool `json:"autoPause,omitempty"`
+
+	// AutoResume Auto-resume configuration for paused sandboxes.
+	AutoResume bool `json:"autoResume,omitempty"`
 
 	// Working directory of the sandbox.
 	Workdir string `json:"workdir,omitempty"`
@@ -136,7 +148,6 @@ func GetDefaultSandbox() *Sandbox {
 	sb := &Sandbox{
 		Timeout:     30 * 60, // 30 minutes
 		IdleTimeout: -1,      // no idle timeout
-		IdlePolicy:  "delete",
 		Port:        8080,
 	}
 	sb.ReplicaSet = &v1.ReplicaSet{}
@@ -147,11 +158,11 @@ func GetDefaultSandbox() *Sandbox {
 	return sb
 }
 
-func validAndRestValueOfSandbox(sb *Sandbox) {
+func validAndRestValueOfSandbox(sb *Sandbox) error {
 	// one day max
 	maxTimeout := 60 * 60 * 24
-	if sb.Timeout >= maxTimeout {
-		sb.Timeout = maxTimeout
+	if sb.Timeout > maxTimeout {
+		return fmt.Errorf("invalid timeout %d, must be <= 60*60*24 (seconds), -1 is no timeout", sb.Timeout)
 	}
 
 	// default timeout, since int default is 0 when not set, so we set it to 30 minutes, E2B default is 300s
@@ -159,10 +170,19 @@ func validAndRestValueOfSandbox(sb *Sandbox) {
 		sb.Timeout = 30 * 60 // default 30 minutes
 	}
 
+	if sb.Timeout < 0 {
+		sb.Timeout = -1 // no timeout
+	}
+
 	// 50m max
 	// since k8s events default retention time is 1h, so the max idle timeout is set to 50m to make sure the last request event can be recorded in k8s events and can be used for idle timeout check in scaler
-	if sb.IdleTimeout > 50*60 {
-		sb.IdleTimeout = 50 * 60
+	maxIdleTimeout := 50 * 60
+	if sb.IdleTimeout > maxIdleTimeout {
+		return fmt.Errorf("invalid idle timeout %v, must <= 3000 (seconds), -1 is no idle timeout", sb.IdleTimeout)
+	}
+
+	if sb.IdleTimeout <= 0 {
+		sb.IdleTimeout = -1 // no idle timeout
 	}
 
 	// check resources is not set and set to default value
@@ -178,6 +198,8 @@ func validAndRestValueOfSandbox(sb *Sandbox) {
 	if sb.MemoryLimit == "" {
 		sb.MemoryLimit = DefaultMemoryLimit
 	}
+
+	return nil
 }
 
 func (sb *Sandbox) Make() error {
@@ -276,7 +298,9 @@ func (sb *Sandbox) Make() error {
 	sb.EnvVars["AGENT_SANDBOX_NAME"] = sb.Name
 
 	// other default values
-	validAndRestValueOfSandbox(sb)
+	if err := validAndRestValueOfSandbox(sb); err != nil {
+		return err
+	}
 
 	return nil
 }

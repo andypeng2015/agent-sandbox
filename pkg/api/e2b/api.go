@@ -59,6 +59,7 @@ func GetDefaultE2BSandbox() *api.Sandbox {
 		EnvdAccessToken: "envd-access-token-x",
 		ClientID:        "client-id-x",
 		TemplateID:      "code-interpreter-v1",
+		Metadata:        map[string]string{},
 	}
 }
 

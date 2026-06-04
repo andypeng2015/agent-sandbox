@@ -155,35 +155,26 @@ func (a *Handler) CreateSandbox(ctx context.Context, newSandbox *api.NewSandbox)
 	sb.Template = tplID
 	sb.Metadata = newSandbox.Metadata
 	sb.EnvVars = newSandbox.EnvVars
-
-	if newSandbox.Timeout <= 300 || newSandbox.Timeout > 60*60*12 {
-		return nil, &APIError{
-			ClientMsg: fmt.Sprintf("invalid timeout %d, must be in 300 ~  36000 (unit is seconds, 5 minutes ~ 10 hours)", newSandbox.Timeout),
-			Code:      http.StatusBadRequest,
-		}
-	}
 	sb.Timeout = newSandbox.Timeout
 
-	idlePolicyStr := newSandbox.Metadata["idlePolicy"]
-	if idlePolicyStr != "" {
-		sb.IdlePolicy = idlePolicyStr
+	if newSandbox.AutoPause != nil {
+		sb.AutoPause = *newSandbox.AutoPause
 	}
+	if newSandbox.AutoResume != nil {
+		sb.AutoResume = newSandbox.AutoResume.Enabled
+	}
+
 	idleTimeoutStr := newSandbox.Metadata["idleTimeout"]
 	if idleTimeoutStr != "" {
 		v, err := strconv.Atoi(idleTimeoutStr)
-		if err == nil {
-			if 5*60 <= v && v <= 50*60 {
-				sb.IdleTimeout = v
-			} else {
-				errMsg := fmt.Sprintf("invalid idle timeout %s, must be in 300 ~ 3000 (unit is seconds, 5 minutes ~ 50 minutes)", idleTimeoutStr)
-				return nil, &APIError{
-					ClientMsg: errMsg,
-					Code:      http.StatusBadRequest,
-				}
+		if err != nil {
+			return nil, &APIError{
+				Err:       err,
+				ClientMsg: "invalid idleTimeout value, must be an integer",
+				Code:      http.StatusBadRequest,
 			}
-		} else {
-			klog.Errorf("failed to parse idle timeout %s: %v", idleTimeoutStr, err)
 		}
+		sb.IdleTimeout = v
 	}
 
 	// init name and valid fields
@@ -227,9 +218,21 @@ func (a *Handler) ConnectSandbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//TODO active the sandbox if it's paused or stopped
+	resumed := false
+	if sb.Status == sandbox.Paused && sb.AutoResume {
+		err = a.controller.Resume(sb, "SDKGetSandbox")
+		if err != nil {
+			klog.Errorf("Failed to resume sandbox %s: %v", sb.Name, err)
+			sendAPIError(w, http.StatusFailedDependency, fmt.Sprintf("failed to resume sandbox %s: %v", sb.Name, err))
+			return
+		}
+		resumed = true
+	}
 
 	apiSbx := a.convertToE2BSandbox(sb)
+	if resumed {
+		apiSbx.Metadata["resumed"] = "true"
+	}
 
 	sendAPIOK(w, http.StatusCreated, apiSbx)
 	return
@@ -251,13 +254,22 @@ func (a *Handler) SandboxRouterOfPath() http.HandlerFunc {
 			return
 		}
 
-		sbRS, err := a.controller.GetRSByID(sandboxID)
+		sb, err := a.controller.GetByID(sandboxID)
 		if err != nil {
 			klog.Errorf("Get sandbox %s error: %v", sandboxID, err)
 			sendAPIError(w, http.StatusNotFound, fmt.Sprintf("sandbox %s not found", sandboxID))
 			return
 		}
-		sbName := sbRS.Name
+		sbName := sb.Name
+
+		if sb.Status == sandbox.Paused && sb.AutoResume {
+			err = a.controller.Resume(sb, "RequestOfPath")
+			if err != nil {
+				klog.Errorf("Failed to resume sandbox %s: %v", sb.Name, err)
+				sendAPIError(w, http.StatusFailedDependency, fmt.Sprintf("failed to resume sandbox %s: %v", sb.Name, err))
+				return
+			}
+		}
 
 		// rewrite url to /sandbox/{name}/{port}/...
 		prefixToStrip := fmt.Sprintf("/sandboxes/router/%s/%s", sandboxID, port)
@@ -278,9 +290,9 @@ func (a *Handler) SandboxRouterOfPath() http.HandlerFunc {
 	}
 }
 
-func (a *Handler) SandboxRouterNative() http.HandlerFunc {
+func (a *Handler) SandboxRouterOfDomain() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		klog.Info("Entering SandboxRouterNative", " url=", r.URL, "method=", r.Method, "query=", r.URL.RawQuery)
+		klog.Info("Entering SandboxRouterOfDomain", " url=", r.URL, "method=", r.Method, "query=", r.URL.RawQuery)
 
 		// match host and request url is {port}-{sandbox_id}.{domain}/...
 		reqHost := r.Host
@@ -290,7 +302,7 @@ func (a *Handler) SandboxRouterNative() http.HandlerFunc {
 		if !matched {
 			// otherwise just return 404
 			klog.Info("no matched sandbox proxy pattern, url=", reqHost)
-			sendAPIError(w, http.StatusNotFound, "invalid sandbox request pattern 1")
+			sendAPIError(w, http.StatusNotFound, "invalid sandbox request "+reqHost)
 			return
 		}
 
@@ -299,19 +311,28 @@ func (a *Handler) SandboxRouterNative() http.HandlerFunc {
 		submatches := portSvr.FindStringSubmatch(reqHost)
 		if len(submatches) < 3 {
 			klog.Info("invalid matched sandbox request pattern, url=", reqHost)
-			sendAPIError(w, http.StatusNotFound, "invalid sandbox request pattern 2")
+			sendAPIError(w, http.StatusNotFound, "invalid sandbox request, no port found "+reqHost)
 			return
 		}
 		port := submatches[1]
 		sandboxID := submatches[2]
 
-		sbRS, err := a.controller.GetRSByID(sandboxID)
+		sb, err := a.controller.GetByID(sandboxID)
 		if err != nil {
 			klog.Errorf("Get sandbox %s error: %v", sandboxID, err)
 			sendAPIError(w, http.StatusNotFound, fmt.Sprintf("sandbox %s not found", sandboxID))
 			return
 		}
-		sbName := sbRS.Name
+		sbName := sb.Name
+
+		if sb.Status == sandbox.Paused && sb.AutoResume {
+			err = a.controller.Resume(sb, "Request")
+			if err != nil {
+				klog.Errorf("Failed to resume sandbox %s: %v", sb.Name, err)
+				sendAPIError(w, http.StatusFailedDependency, fmt.Sprintf("failed to resume sandbox %s: %v", sb.Name, err))
+				return
+			}
+		}
 
 		// rewrite url to /sandbox/{name}/{port}/...
 		pxyURL := fmt.Sprintf("/sandbox/%s%s", sbName, r.URL.Path)
@@ -337,7 +358,6 @@ func (a *Handler) convertToE2BSandbox(sb *sandbox.Sandbox) *api.Sandbox {
 	apiSbx.EnvdAccessToken = sb.ID
 	apiSbx.TrafficAccessToken = sb.ID
 
-	sb.Metadata = map[string]string{}
 	if sb.Metadata != nil {
 		apiSbx.Metadata = sb.Metadata
 	}
@@ -354,6 +374,15 @@ func (a *Handler) convertToE2BSandbox(sb *sandbox.Sandbox) *api.Sandbox {
 	apiSbx.State = api.Running
 	if sb.Status != "" {
 		apiSbx.State = api.SandboxState(sb.Status)
+	}
+
+	onTimeout := api.Kill
+	if sb.AutoPause {
+		onTimeout = api.Pause
+	}
+	apiSbx.Lifecycle = &api.SandboxLifecycle{
+		AutoResume: sb.AutoResume,
+		OnTimeout:  onTimeout,
 	}
 
 	return apiSbx

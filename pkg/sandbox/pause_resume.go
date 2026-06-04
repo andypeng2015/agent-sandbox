@@ -1,0 +1,91 @@
+/*
+ * Copyright 2025 The https://github.com/agent-sandbox/agent-sandbox Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package sandbox
+
+import (
+	"context"
+	"time"
+
+	"github.com/agent-sandbox/agent-sandbox/pkg/config"
+	v1meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
+)
+
+// TODO, consider to HPA resume
+
+func (s *Controller) Pause(sb *Sandbox, reason string) error {
+	if deriveSandboxStatus(sb.ReplicaSet) == Paused {
+		return nil
+	}
+
+	snapshot, err := s.captureProcessSnapshot(sb)
+	if err != nil {
+		return err
+	}
+
+	rsCopy := sb.ReplicaSet.DeepCopy()
+	annotations := rsCopy.GetAnnotations()
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+
+	replicas := int32(0)
+	annotations[AnnotationPaused] = "true"
+	annotations[AnnotationPausedAt] = time.Now().UTC().Format(time.RFC3339)
+	annotations[AnnotationPauseReason] = reason
+	annotations[AnnotationProcessSnapshot] = snapshot
+	rsCopy.SetAnnotations(annotations)
+	rsCopy.Spec.Replicas = &replicas
+
+	_, err = s.kclient.AppsV1().ReplicaSets(config.Cfg.SandboxNamespace).Update(context.TODO(), rsCopy, v1meta.UpdateOptions{})
+	return err
+}
+
+func (s *Controller) Resume(sb *Sandbox, reason string) error {
+	if deriveSandboxStatus(sb.ReplicaSet) != Paused {
+		return nil
+	}
+
+	klog.Infof("Resuming sandbox %s, reason %s", sb.Name, reason)
+
+	rsCopy := sb.ReplicaSet.DeepCopy()
+	annotations := rsCopy.GetAnnotations()
+	snapshot := annotations[AnnotationProcessSnapshot]
+	//snapshot = "eyJjYXB0dXJlZF90aW1lIjoiMjAyNi0wNS0yMlQwNzozMTozOS41Mjg2NjlaIiwicHJvY2Vzc2VzIjpbeyJjb25maWciOnsiY21kIjoiL2Jpbi9iYXNoIiwiYXJncyI6WyItbCIsIi1jIiwicHl0aG9uIC1tIGh0dHAuc2VydmVyIDgwMDEiXX0sInBpZCI6MjAzfV19"
+	delete(annotations, AnnotationPaused)
+	delete(annotations, AnnotationPausedAt)
+	delete(annotations, AnnotationPauseReason)
+	annotations[AnnotationResumedAt] = time.Now().UTC().Format(time.RFC3339)
+	annotations[AnnotationResumeReason] = reason
+	rsCopy.SetAnnotations(annotations)
+
+	replicas := int32(1)
+	rsCopy.Spec.Replicas = &replicas
+	if _, err := s.kclient.AppsV1().ReplicaSets(config.Cfg.SandboxNamespace).Update(context.TODO(), rsCopy, v1meta.UpdateOptions{}); err != nil {
+		return err
+	}
+
+	sb.ReplicaSet = rsCopy
+	if err := s.WaitForReplicaSetReady(sb); err != nil {
+		return err
+	}
+	if err := s.restoreProcessSnapshot(sb, snapshot); err != nil {
+		return err
+	}
+
+	return nil
+}
