@@ -21,9 +21,7 @@ import (
 
 	"github.com/agent-sandbox/agent-sandbox/pkg/config"
 	"github.com/agent-sandbox/agent-sandbox/pkg/sandbox"
-	v1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	v1meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/agent-sandbox/agent-sandbox/pkg/telemetry"
 	"k8s.io/klog/v2"
 )
 
@@ -57,36 +55,19 @@ func (s *Scaler) ScalingDownOfTimeout() {
 
 		tt := baseTime.Add(time.Duration(timeout) * time.Second)
 		if tt.Before(time.Now()) {
-			reason := "SandboxDeleted"
-			message := "Sandbox deleted due to timeout"
 			if sb.AutoPause && config.CheckFeature(config.Cfg.PauseResume, sb.User) {
+				klog.Infof("Paused sandbox %s TimeoutBase %s Timeout %v", sb.Name, baseTime, sb.Timeout)
 				if err := s.controller.Pause(sb, "timeout"); err != nil {
 					klog.Errorf("Failed to pause sandbox %v, error %v", sb, err)
 					continue
 				}
-				reason = "SandboxPaused"
-				message = "Sandbox paused due to timeout"
-				klog.Infof("Paused sandbox %s TimeoutBase %s Timeout %v", sb.Name, baseTime, sb.Timeout)
 			} else {
-				if err := s.controller.Delete(sb.Name); err != nil {
+				klog.Infof("Scaled down sandbox %s TimeoutBase %s Timeout %v IdleTimeout %v", sb.Name, baseTime, sb.Timeout, sb.IdleTimeout)
+				if err := s.controller.DeleteWithReason(sb.Name, telemetry.ReasonTimeout); err != nil {
 					klog.Errorf("Failed to scale down sandbox %v, error %v", sb, err)
 					continue
 				}
-				klog.Infof("Scaled down sandbox %s TimeoutBase %s Timeout %v IdleTimeout %v", sb.Name, baseTime, sb.Timeout, sb.IdleTimeout)
 			}
-
-			r := s.activator.Recorder()
-			obj := &v1.ReplicaSet{
-				TypeMeta: v1meta.TypeMeta{
-					Kind:       "ReplicaSet",
-					APIVersion: "apps/v1",
-				},
-				ObjectMeta: v1meta.ObjectMeta{
-					Name:      sb.Name,
-					Namespace: config.Cfg.SandboxNamespace,
-				},
-			}
-			r.Event(obj, corev1.EventTypeWarning, reason, message)
 
 			// to reduce kube-apiserver pressure, QPS not over 100
 			time.Sleep(10 * time.Millisecond)

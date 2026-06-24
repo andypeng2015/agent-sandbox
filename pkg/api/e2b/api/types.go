@@ -607,6 +607,11 @@ type SandboxMetric struct {
 	TimestampUnix int64 `json:"timestampUnix"`
 }
 
+type Snapshot struct {
+	SnapshotID string   `json:"snapshotID"`
+	Names      []string `json:"names"`
+}
+
 // SandboxNetworkConfig defines model for SandboxNetworkConfig.
 type SandboxNetworkConfig struct {
 	// AllowOut List of allowed CIDR blocks or IP addresses for egress traffic. Allowed addresses always take precedence over blocked addresses.

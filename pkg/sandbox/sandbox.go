@@ -17,6 +17,7 @@
 package sandbox
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -69,16 +70,16 @@ type Sandbox struct {
 	//metav1.Object `json:"-"`
 	ReplicaSet *v1.ReplicaSet `json:"-"`
 
-	User string `json:"-"`
+	User string `json:"user,omitempty"`
 
-	IsPool bool `json:"-"`
+	IsPool bool `json:"isPool,omitempty"`
 
 	TemplateObj *config.Template `json:"-"`
 
 	// Set the CMD of the SandboxHandler, overriding any CMD of the container image.
-	Cmd string `json:"-"`
+	Cmd string `json:"cmd,omitempty"`
 
-	Args []string `json:"-"`
+	Args []string `json:"args,omitempty"`
 
 	// ------------
 	// for input params, used for create sandbox
@@ -200,6 +201,13 @@ func validAndRestValueOfSandbox(sb *Sandbox) error {
 	}
 
 	return nil
+}
+
+func (sb *Sandbox) ToString() string {
+	sbTmp := *sb
+	sbTmp.User = sbTmp.User[:20]
+	sbStr, _ := json.Marshal(sbTmp)
+	return string(sbStr)
 }
 
 func (sb *Sandbox) Make() error {

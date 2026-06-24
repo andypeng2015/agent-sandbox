@@ -24,6 +24,7 @@ import (
 
 	"github.com/agent-sandbox/agent-sandbox/pkg/config"
 	"github.com/agent-sandbox/agent-sandbox/pkg/sandbox"
+	"github.com/agent-sandbox/agent-sandbox/pkg/telemetry"
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"k8s.io/klog/v2"
@@ -196,7 +197,7 @@ func (a *Handler) DelSandboxTool(ctx context.Context, req *mcp.CallToolRequest, 
 
 	klog.V(2).Infof("Delete sandbox tool by name=%s", input.Name)
 
-	err := a.controller.Delete(input.Name)
+	err := a.controller.DeleteWithReason(input.Name, telemetry.ReasonMCP)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to delete Sandbox %s: %v", input.Name, err)
 	}

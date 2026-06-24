@@ -18,9 +18,12 @@ package sandbox
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/agent-sandbox/agent-sandbox/pkg/activator"
 	"github.com/agent-sandbox/agent-sandbox/pkg/config"
+	corev1 "k8s.io/api/core/v1"
 	v1meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
@@ -34,6 +37,7 @@ func (s *Controller) Pause(sb *Sandbox, reason string) error {
 
 	snapshot, err := s.captureProcessSnapshot(sb)
 	if err != nil {
+		s.EventPause(sb, reason, err)
 		return err
 	}
 
@@ -47,9 +51,33 @@ func (s *Controller) Pause(sb *Sandbox, reason string) error {
 	annotations[AnnotationPaused] = "true"
 	annotations[AnnotationPausedAt] = time.Now().UTC().Format(time.RFC3339)
 	annotations[AnnotationPauseReason] = reason
-	annotations[AnnotationProcessSnapshot] = snapshot
+	if snapshot != "" {
+		annotations[AnnotationProcessSnapshot] = snapshot
+	} else {
+		klog.Warningf("Empty process snapshot for sandbox %s when pausing, this may cause failure when resume", sb.Name)
+	}
 	rsCopy.SetAnnotations(annotations)
 	rsCopy.Spec.Replicas = &replicas
+
+	_, err = s.kclient.AppsV1().ReplicaSets(config.Cfg.SandboxNamespace).Update(context.TODO(), rsCopy, v1meta.UpdateOptions{})
+	s.EventPause(sb, reason, err)
+	return err
+}
+
+func (s *Controller) SandboxProcessSnapshot(sb *Sandbox) error {
+	snapshot, err := s.captureProcessSnapshot(sb)
+	if err != nil {
+		return err
+	}
+
+	rsCopy := sb.ReplicaSet.DeepCopy()
+	annotations := rsCopy.GetAnnotations()
+	if annotations == nil {
+		annotations = map[string]string{}
+	}
+
+	annotations[AnnotationProcessSnapshot] = snapshot
+	rsCopy.SetAnnotations(annotations)
 
 	_, err = s.kclient.AppsV1().ReplicaSets(config.Cfg.SandboxNamespace).Update(context.TODO(), rsCopy, v1meta.UpdateOptions{})
 	return err
@@ -76,16 +104,48 @@ func (s *Controller) Resume(sb *Sandbox, reason string) error {
 	replicas := int32(1)
 	rsCopy.Spec.Replicas = &replicas
 	if _, err := s.kclient.AppsV1().ReplicaSets(config.Cfg.SandboxNamespace).Update(context.TODO(), rsCopy, v1meta.UpdateOptions{}); err != nil {
+		s.EventResume(sb, reason, err)
 		return err
 	}
 
 	sb.ReplicaSet = rsCopy
 	if err := s.WaitForReplicaSetReady(sb); err != nil {
+		s.EventResume(sb, reason, err)
 		return err
 	}
 	if err := s.restoreProcessSnapshot(sb, snapshot); err != nil {
+		s.EventResume(sb, reason, err)
 		return err
 	}
 
+	s.EventResume(sb, reason, nil)
 	return nil
+}
+
+func (s *Controller) EventPause(sb *Sandbox, reason string, err error) {
+	t := corev1.EventTypeNormal
+	r := "SandboxPaused"
+	m := fmt.Sprintf("Sandbox paused, name %s, reason %s", sb.Name, reason)
+
+	if err != nil {
+		t = corev1.EventTypeWarning
+		r = "SandboxPausedFailed"
+		m = fmt.Sprintf("Failed to paused sandbox, name %s, error %v", sb.Name, err.Error())
+	}
+
+	activator.RecordEvent(s.recorder, t, sb.Name, r, m)
+}
+
+func (s *Controller) EventResume(sb *Sandbox, reason string, err error) {
+	t := corev1.EventTypeNormal
+	r := "SandboxResume"
+	m := fmt.Sprintf("Sandbox resume, name %s, reason %s", sb.Name, reason)
+
+	if err != nil {
+		t = corev1.EventTypeWarning
+		r = "SandboxResumeFailed"
+		m = fmt.Sprintf("Failed to resume sandbox, name %s, error %v", sb.Name, err.Error())
+	}
+
+	activator.RecordEvent(s.recorder, t, sb.Name, r, m)
 }

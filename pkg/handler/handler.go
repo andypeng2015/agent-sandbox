@@ -75,6 +75,14 @@ func (ahh *ApiHttpHandler) regHandlers() {
 	ahh.mux.HandleFunc(fmt.Sprintf("POST %s/sandbox/metrics", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.SandboxMetrics) })
 	ahh.mux.HandleFunc(fmt.Sprintf("GET %s/ratelimit", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.GetRateLimitStatus) })
 
+	// Telemetry dashboard
+	ahh.mux.HandleFunc(fmt.Sprintf("GET %s/telemetry/status", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.GetTelemetryStatus) })
+	ahh.mux.HandleFunc(fmt.Sprintf("GET %s/telemetry/summary", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.GetTelemetrySummary) })
+	ahh.mux.HandleFunc(fmt.Sprintf("GET %s/telemetry/timeseries", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.GetTelemetryTimeseries) })
+	ahh.mux.HandleFunc(fmt.Sprintf("GET %s/telemetry/by_user", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.GetTelemetryByUser) })
+	ahh.mux.HandleFunc(fmt.Sprintf("GET %s/telemetry/durations", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.GetTelemetryDurations) })
+	ahh.mux.HandleFunc(fmt.Sprintf("GET %s/telemetry/logs", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.GetTelemetryLogs) })
+
 	ahh.mux.HandleFunc(fmt.Sprintf("GET %s/logs/sandbox/{name}", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.GetSandboxLogs) })
 	ahh.mux.HandleFunc(fmt.Sprintf("GET %s/events", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.ListSandboxEvents) })
 
@@ -97,7 +105,7 @@ func (ahh *ApiHttpHandler) regHandlers() {
 	// Rest API for pool management
 	ahh.mux.HandleFunc(fmt.Sprintf("GET %s/pool", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.ListPool) })
 	ahh.mux.HandleFunc(fmt.Sprintf("GET %s/pool/sandbox/{name}", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.ListPoolSandbox) })
-	ahh.mux.HandleFunc(fmt.Sprintf("DELETE %s/pool/{name}", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.DeletePoo) })
+	ahh.mux.HandleFunc(fmt.Sprintf("DELETE %s/pool/{name}", config.Cfg.APIBaseURL), func(w http.ResponseWriter, r *http.Request) { wrapperHandler(w, r, sbHeader.DeletePoolSandboxes) })
 
 	// e2b API
 	e2bHeader := e2bapi.NewHandler(ahh.rootCtx, c, a)

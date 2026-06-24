@@ -28,15 +28,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/agent-sandbox/agent-sandbox/pkg/activator"
 	"github.com/agent-sandbox/agent-sandbox/pkg/config"
+	"github.com/agent-sandbox/agent-sandbox/pkg/telemetry"
 	"github.com/agent-sandbox/agent-sandbox/pkg/utils"
 	v1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	v1core "k8s.io/api/core/v1"
 	v1meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	"k8s.io/metrics/pkg/apis/metrics/v1beta1"
@@ -52,15 +56,17 @@ type Controller struct {
 	kcfg          *rest.Config
 	rootCtx       context.Context
 	pl            *PoolManager
+	recorder      record.EventRecorder
 }
 
-func NewController(ctx context.Context, cfg *rest.Config, pl *PoolManager) *Controller {
+func NewController(ctx context.Context, cfg *rest.Config, pl *PoolManager, recorder record.EventRecorder) *Controller {
 	c := kubeclient.Get(ctx)
 	sh := &Controller{
-		rootCtx: ctx,
-		kclient: c,
-		kcfg:    cfg,
-		pl:      pl,
+		rootCtx:  ctx,
+		kclient:  c,
+		kcfg:     cfg,
+		pl:       pl,
+		recorder: recorder,
 	}
 	return sh
 }
@@ -117,6 +123,12 @@ func deriveSandboxStatus(rs *v1.ReplicaSet) SandboxState {
 		replicas = *rs.Spec.Replicas
 	}
 	if rs.Annotations[AnnotationPaused] == "true" && replicas == 0 {
+		return Paused
+	}
+	// Support resume without pause,
+	// in case the sandbox pod is deleted by some accident operation e.g. eviction,
+	// and user want to resume  by before call Sandbox Snapshot.
+	if rs.Annotations[AnnotationProcessSnapshot] != "" && replicas == 0 {
 		return Paused
 	}
 	if replicas > 0 && replicas == rs.Status.ReadyReplicas {
@@ -200,17 +212,31 @@ var CreateRetry = wait.Backoff{
 }
 
 func (s *Controller) Create(sb *Sandbox) (*Sandbox, error) {
+	start := time.Now()
+	tlog := telemetry.TLog{LogName: "sandbox.create", Message: sb.ToString()}
+	defer func() {
+		tlog.Duration = time.Since(start).Seconds()
+		TLog(sb, tlog)
+	}()
+
 	// retry to AcquirePoolReplicaSet if error is conflict,
 	//because multiple sandboxes may try to acquire the same pool replicaset
 	acquired := &v1.ReplicaSet{}
 	fromPool := false
-	err := retry.OnError(CreateRetry, IsAcquireError, func() error {
-		var err error
-		acquired, fromPool, err = s.pl.AcquirePoolReplicaSet(sb)
-		return err
-	})
+
+	var err error
+	if sb.TemplateObj.Pool.Size > 0 {
+		err = retry.OnError(CreateRetry, IsAcquireError, func() error {
+			var err error
+			acquired, fromPool, err = s.pl.AcquirePoolReplicaSet(sb)
+			return err
+		})
+	} else {
+		acquired, err = s.pl.createSingleReplicaSet(sb)
+	}
 
 	if err != nil {
+		tlog.Message += " error: " + err.Error()
 		klog.Errorf("failed to create sandbox, error=%v, sandbox=%v", err, sb)
 		return nil, fmt.Errorf("failed to create sandbox, error=%v, sandbox=%v", err, sb)
 	}
@@ -218,19 +244,22 @@ func (s *Controller) Create(sb *Sandbox) (*Sandbox, error) {
 	sb.ReplicaSet = acquired
 
 	// Wait for ReplicaSet to be ready
+	var readyErr error
 	if fromPool && sb.TemplateObj.Pool.StartupCmd != "" {
-		if perr := s.StartupPoolReplicaSet(sb, false); perr != nil {
-			klog.Errorf("timeout waiting for sandbox from pool to be ready: %v, instance not ready yet, please get it leater or check pod status", perr)
-			return sb, perr
-		}
+		readyErr = s.StartupPoolReplicaSet(sb, false)
 	} else {
-		if perr := s.WaitForReplicaSetReady(sb); perr != nil {
-			klog.Errorf("timeout waiting for sandbox to be ready: %v, instance not ready yet, please get it leater or check pod status", perr)
-			return sb, perr
-		}
+		readyErr = s.WaitForReplicaSetReady(sb)
+	}
+
+	if readyErr != nil {
+		errMsg := fmt.Errorf("timeout waiting for sandbox to be ready, please get it leater or check sandbox status, error: %v", readyErr)
+		tlog.Message += " error: " + errMsg.Error()
+		klog.Errorf(errMsg.Error())
+		return sb, errMsg
 	}
 
 	sb.Status = Running
+	tlog.Success = true
 	return sb, nil
 }
 
@@ -244,17 +273,16 @@ func (s *Controller) GetInstances(name string) []*v1core.Pod {
 	return pods
 }
 
-func (s *Controller) DeleteByID(id string) error {
-	rs, err := s.GetRSByID(id)
-	if err != nil {
-		return err
-	}
-	return s.Delete(rs.Name)
+func (s *Controller) DeleteByIDWithReason(id, reason string) error {
+	selector, _ := labels.Parse(fmt.Sprintf("sbx-id=%s", id))
+	return s.doDeleteWithReason(selector, reason)
 }
 
-func (s *Controller) Delete(name string) error {
+// DeleteWithReason deletes a sandbox by name and emits a sandbox.delete event.
+// The event is emitted regardless of whether the underlying K8s delete succeeded.
+func (s *Controller) DeleteWithReason(name, reason string) error {
 	selector, _ := labels.Parse(fmt.Sprintf("sandbox=%s", name))
-	return s.DoDelete(selector)
+	return s.doDeleteWithReason(selector, reason)
 }
 
 func (s *Controller) DeleteByTemplateName(name string) error {
@@ -262,25 +290,62 @@ func (s *Controller) DeleteByTemplateName(name string) error {
 		PoolLabel: "true",
 		TPLLabel:  name,
 	}.AsSelector()
-	return s.DoDelete(selector)
+	return s.doDeleteWithReason(selector, telemetry.ReasonTemplateCleanup)
 }
 
-func (s *Controller) DoDelete(selector labels.Selector) error {
-	// delete rs by selector, since rs name may be different when acquire from pool
+func (s *Controller) doDeleteWithReason(selector labels.Selector, reason string) error {
 	rss, err := rsclient.Get(s.rootCtx).Lister().ReplicaSets(config.Cfg.SandboxNamespace).List(selector)
 	if err != nil {
 		return err
 	}
 	for _, rs := range rss {
 		err = s.kclient.AppsV1().ReplicaSets(config.Cfg.SandboxNamespace).Delete(context.TODO(), rs.Name, v1meta.DeleteOptions{})
+		s.eventDelete(rs.Name, reason, err)
+		s.tlogDelete(rs, reason, err)
 		if err != nil {
 			klog.Errorf("failed to delete replicaset %s: %v", rs.Name, err)
-			return err
 		}
-		return err
 	}
 
-	return nil
+	return err
+}
+
+func (s *Controller) tlogDelete(rs *v1.ReplicaSet, reason string, err error) {
+	sbx, gerr := s.GetSandbox(rs)
+	if gerr != nil {
+		klog.Errorf("failed to get sandbox for replicaset %s: %v", rs.Name, gerr)
+		return
+	}
+
+	tlog := telemetry.TLog{
+		LogName: "sandbox.delete",
+		Reason:  reason,
+		Success: err == nil,
+		Message: "sandbox.delete " + reason,
+	}
+
+	// For deletes, Duration carries the sandbox's lifetime in seconds.
+	if sbx != nil && !sbx.CreatedAt.IsZero() {
+		tlog.Duration = time.Since(sbx.CreatedAt).Seconds()
+	}
+	if err != nil {
+		tlog.Message = err.Error()
+	}
+	TLog(sbx, tlog)
+}
+
+func (s *Controller) eventDelete(name string, reason string, err error) {
+	t := corev1.EventTypeNormal
+	r := "SandboxDelete"
+	m := fmt.Sprintf("Sandbox delete, name %s, reason %s", name, reason)
+
+	if err != nil {
+		t = corev1.EventTypeWarning
+		r = "SandboxDeleteFailed"
+		m = fmt.Sprintf("Failed to delete sandbox, name %s, error %v", name, err.Error())
+	}
+
+	activator.RecordEvent(s.recorder, t, name, r, m)
 }
 
 type SandboxLogsResult struct {

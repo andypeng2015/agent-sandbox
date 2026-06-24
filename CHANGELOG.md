@@ -55,3 +55,7 @@ V0.6.0 - 2026-06-03
 - Add: UI Dashboard, providing a comprehensive view of sandbox creation status.
 - Improve: optimize idle timeout reclamation performance by filtering out sandboxes that don't need reclamation.
 --------------------------
+V0.7.0 - 2026-06-24
+- Add: Sandbox Snapshot feature, which can snapshot the commands started in a sandbox and automatically re-start them on resume.
+- Add: Telemetry reporting feature, supporting reporting of sandbox creation, destruction, error, and other log data, making it easier to monitor and analyze sandbox usage.
+--------------------------

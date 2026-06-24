@@ -71,9 +71,9 @@ func getTransport() *http.Transport {
 
 		ResponseHeaderTimeout: 35 * time.Second,
 
-		MaxIdleConns:        500,
-		MaxIdleConnsPerHost: 20,
-		IdleConnTimeout:     90 * time.Second,
+		MaxIdleConns:        2000,
+		MaxIdleConnsPerHost: 30,
+		IdleConnTimeout:     330 * time.Second,
 	}
 
 	return transport

@@ -50,14 +50,14 @@ func (a *Handler) executorHandler(ctx context.Context, req *mcp.CallToolRequest,
 		return nil, nil, fmt.Errorf("failed to acquire client session for sandbox %s: %v", tool.SandboxName, err)
 	}
 
-	a.activator.RecordLastEvent(activator.EventTypeLastRequest, tool.SandboxName)
+	a.activator.RecordActiveEvent(activator.EventTypeLastRequest, tool.SandboxName)
 
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      tool.ToolName,
 		Arguments: tool.Arguments,
 	})
 
-	//a.activator.RecordLastEvent(activator.EventTypeLastResponse, tool.SandboxName)
+	//a.activator.RecordActiveEvent(activator.EventTypeLastResponse, tool.SandboxName)
 
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to call tool %s in sandbox %s: %v", tool.ToolName, tool.SandboxName, err)

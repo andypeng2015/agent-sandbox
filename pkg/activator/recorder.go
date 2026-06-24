@@ -17,13 +17,31 @@
 package activator
 
 import (
-    "context"
+	"context"
 
-    "github.com/agent-sandbox/agent-sandbox/pkg/client"
-    "k8s.io/client-go/tools/record"
+	"github.com/agent-sandbox/agent-sandbox/pkg/client"
+	"github.com/agent-sandbox/agent-sandbox/pkg/config"
+	v1 "k8s.io/api/apps/v1"
+	v1meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 )
 
 func GetRecorder(ctx context.Context) record.EventRecorder {
-    r := client.CreateRecorderEventImpl(ctx, ComponentName)
-    return r
+	r := client.CreateRecorderEventImpl(ctx, ComponentName)
+	return r
+}
+
+func RecordEvent(r record.EventRecorder, eventType string, name string, reason string, message string) {
+	obj := &v1.ReplicaSet{
+		TypeMeta: v1meta.TypeMeta{
+			Kind:       "ReplicaSet",
+			APIVersion: "apps/v1",
+		},
+		ObjectMeta: v1meta.ObjectMeta{
+			Name:      name,
+			Namespace: config.Cfg.SandboxNamespace,
+		},
+	}
+
+	r.Event(obj, eventType, reason, message)
 }

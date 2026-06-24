@@ -60,6 +60,8 @@ type Config struct {
 	RateLimit      RateLimitConfig       `split_words:"true"`
 	RateLimitUsers []UserRateLimitConfig `json:"rateLimitUsers"`
 
+	Telemetry TelemetryConfig `split_words:"true"`
+
 	// witch Kubernetes namespace to create sandboxes Replicaset&Pod in
 	SandboxNamespace string `split_words:"true" default:"default" required:"false"`
 
@@ -72,6 +74,8 @@ type Config struct {
 	ConfigmapName string `split_words:"true" default:"agent-sandbox" required:"false"`
 
 	EnvName string `split_words:"true" default:"dev" required:"false"`
+
+	LogLevel string `split_words:"true" default:"2" required:"false"` // 0 - Info, 1,2 - Debug
 
 	APITokensRaw      string `split_words:"true" default:"testuser-aef134ef-7aa1-945e-9399-7df9a4ad0c3f" required:"false"`
 	RateLimitUsersRaw string `split_words:"true" required:"false"`

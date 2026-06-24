@@ -37,9 +37,12 @@ const (
 )
 
 const (
-	EventTypeLastRequest string = "LastRequestTime"
-
+	EventTypeLastRequest  string = "LastRequestTime"
 	EventTypeLastResponse string = "LastResponseTime"
+
+	// TODO eventTypePaused
+	EventTypePaused string = "SandboxPaused"
+	EventTypeResume string = "SandboxResumed"
 
 	recordEventInterval = 2 * time.Minute
 )
@@ -51,8 +54,7 @@ type Activator struct {
 	lastEventRecordMux sync.Mutex
 }
 
-func NewActivator(ctx context.Context) *Activator {
-	recorder := GetRecorder(ctx)
+func NewActivator(ctx context.Context, recorder record.EventRecorder) *Activator {
 	a := &Activator{
 		rootCtx:           ctx,
 		recorder:          recorder,
@@ -65,7 +67,7 @@ func (a *Activator) Recorder() record.EventRecorder {
 	return a.recorder
 }
 
-func (a *Activator) RecordLastEvent(eventType string, name string) {
+func (a *Activator) RecordActiveEvent(eventType string, name string) {
 	now := time.Now()
 	cacheKey := eventType + "/" + name
 

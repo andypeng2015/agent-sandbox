@@ -1,0 +1,91 @@
+######################
+# Single-instance VictoriaLogs for agent-sandbox lifecycle telemetry.
+#
+# Receives OTLP/HTTP logs at:
+#   http://victorialogs:9428/insert/opentelemetry/v1/logs
+#
+# Query the data via:
+#   http://victorialogs:9428/select/logsql/query
+#
+# Storage: 10Gi PVC (resize via spec.volumeClaimTemplates).
+# Retention: 30 days (override with -retentionPeriod).
+######################
+apiVersion: v1
+kind: Service
+metadata:
+  name: victorialogs
+  labels:
+    app: victorialogs
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 9428
+      targetPort: 9428
+      protocol: TCP
+  selector:
+    app: victorialogs
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: victorialogs
+  labels:
+    app: victorialogs
+spec:
+  serviceName: victorialogs
+  replicas: 1
+  selector:
+    matchLabels:
+      app: victorialogs
+  template:
+    metadata:
+      labels:
+        app: victorialogs
+    spec:
+      containers:
+        - name: victorialogs
+          image: victoriametrics/victoria-logs:v1.13.0-victorialogs
+          imagePullPolicy: IfNotPresent
+          args:
+            - "-storageDataPath=/victoria-logs-data"
+            - "-retentionPeriod=30d"
+            - "-httpListenAddr=:9428"
+          ports:
+            - name: http
+              containerPort: 9428
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9428
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9428
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "500Mi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+          volumeMounts:
+            - name: data
+              mountPath: /victoria-logs-data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi

@@ -35,6 +35,7 @@ import (
 	"github.com/agent-sandbox/agent-sandbox/pkg/capacity"
 	"github.com/agent-sandbox/agent-sandbox/pkg/config"
 	"github.com/agent-sandbox/agent-sandbox/pkg/sandbox"
+	"github.com/agent-sandbox/agent-sandbox/pkg/telemetry"
 	"github.com/agent-sandbox/agent-sandbox/pkg/utils"
 	"github.com/gorilla/websocket"
 	appsv1 "k8s.io/api/apps/v1"
@@ -200,8 +201,7 @@ func (a *Handler) CreateSandbox(r *http.Request) (interface{}, error) {
 	var sb = sandbox.GetDefaultSandbox()
 	sb.User = user
 
-	err := json.NewDecoder(r.Body).Decode(sb)
-	if err != nil {
+	if err := json.NewDecoder(r.Body).Decode(sb); err != nil {
 		return "", fmt.Errorf("failed to decode request body: %v", err)
 	}
 
@@ -222,7 +222,6 @@ func (a *Handler) CreateSandbox(r *http.Request) (interface{}, error) {
 	klog.V(2).Infof("Create sandbox opts %v", sb)
 
 	sbCreated, err := a.controller.Create(sb)
-
 	if err != nil {
 		klog.Errorf("Failed to create sandbox, err: %v", err)
 		return "", fmt.Errorf("failed to create new sandbox, error: %v", err)
@@ -277,7 +276,7 @@ func (a *Handler) DelSandbox(r *http.Request) (interface{}, error) {
 
 	klog.V(2).Infof("Delete sandbox name=%s", name)
 
-	err := a.controller.Delete(name)
+	err := a.controller.DeleteWithReason(name, telemetry.ReasonAPIRequest)
 	if err != nil {
 		return "", fmt.Errorf("failed to delete sandbox %s: %v", name, err)
 	}
@@ -959,7 +958,7 @@ func (a *Handler) ListPoolSandbox(r *http.Request) (interface{}, error) {
 	return sbs, nil
 }
 
-func (a *Handler) DeletePoo(r *http.Request) (interface{}, error) {
+func (a *Handler) DeletePoolSandboxes(r *http.Request) (interface{}, error) {
 	name := r.PathValue("name")
 	if name == "" {
 		return nil, fmt.Errorf("pool name is required")

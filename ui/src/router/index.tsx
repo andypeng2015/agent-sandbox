@@ -7,6 +7,8 @@ import EventsPage from '../pages/EventsPage'
 import FilesPage from '../pages/FilesPage'
 import LoginPage from '../pages/LoginPage'
 import LogsPage from '../pages/LogsPage'
+import ControllerLogsPage from '../pages/ControllerLogsPage'
+import MetricsPage from '../pages/MetricsPage'
 import PoolDetailPage from '../pages/PoolDetailPage'
 import PoolListPage from '../pages/PoolListPage'
 import RateLimitPage from '../pages/RateLimitPage'
@@ -61,6 +63,14 @@ export const appRouter = createHashRouter([
           {
             path: 'ratelimit',
             element: <RateLimitPage />,
+          },
+          {
+            path: 'metrics',
+            element: <MetricsPage />,
+          },
+          {
+            path: 'controller-logs',
+            element: <ControllerLogsPage />,
           },
           {
             path: 'logs',

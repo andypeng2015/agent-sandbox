@@ -14,6 +14,8 @@ export default function AppShellLayout() {
   const canViewSandboxes = canAccessNav('sandboxes', token)
   const canViewPool = canAccessNav('pool', token)
   const canViewRateLimit = canAccessNav('rateLimit', token)
+  const canViewMetrics = canAccessNav('metrics', token)
+  const canViewControllerLogs = canAccessNav('controllerLogs', token)
   const canViewLogs = canAccessNav('logs', token)
   const canViewTerminal = canAccessNav('terminal', token)
   const canViewFiles = canAccessNav('files', token)
@@ -162,6 +164,22 @@ export default function AppShellLayout() {
                           Sandbox-Template Config
                       </NavLink>
                   </li>
+                )}
+                <li></li>
+                <li className="menu-title">Monitoring</li>
+                {canViewMetrics && (
+                    <li>
+                        <NavLink to="/metrics" className={({isActive}) => (isActive ? 'menu-active text-left' : 'text-left')}>
+                            Metrics
+                        </NavLink>
+                    </li>
+                )}
+                {canViewControllerLogs && (
+                    <li>
+                        <NavLink to="/controller-logs" className={({isActive}) => (isActive ? 'menu-active text-left' : 'text-left')}>
+                            Logs
+                        </NavLink>
+                    </li>
                 )}
                 {canViewEvents && (
                   <li>

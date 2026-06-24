@@ -39,11 +39,16 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 
 		start := time.Now()
 
-		klog.V(1).Infof("Started request: %s %s%s, request headers %v", r.Method, r.Host, r.URL, r.Header)
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+
+		klog.V(1).Infof("Started request: %s %s:%s%s, request headers %v", r.Method, scheme, r.Host, r.URL, r.Header)
 
 		next.ServeHTTP(w, r)
 
-		klog.V(1).Infof("Finished request: %s %s%s, Time taken: %v, response header: %v", r.Method, r.Host, r.URL, time.Since(start), w.Header())
+		klog.V(1).Infof("Finished request: %s %s://%s%s, Time taken: %v, response header: %v", r.Method, scheme, r.Host, r.URL, time.Since(start), w.Header())
 	})
 }
 

@@ -8,7 +8,11 @@
 1. - [x] Sandbox-Pool
 1. - [x] UI Dashboard
 1. - [x] Pause and Resume
-1. - [ ] Sandbox proxy(router) rate limiting
+1. - [x] Sandbox proxy(router) rate limiting
 1. - [ ] Metrics exporting
 1. - [ ] Resources reservation
+1. - [ ] Leader election for high availability
+1. - [ ] Sandbox Snapshot
+1. - [ ] Use lease instead event to optimize idle timeout performance
+1. - [ ] Telemetry data reporting by logs
 

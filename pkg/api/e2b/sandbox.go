@@ -29,6 +29,7 @@ import (
 	"github.com/agent-sandbox/agent-sandbox/pkg/auth"
 	"github.com/agent-sandbox/agent-sandbox/pkg/capacity"
 	"github.com/agent-sandbox/agent-sandbox/pkg/sandbox"
+	"github.com/agent-sandbox/agent-sandbox/pkg/telemetry"
 	"github.com/agent-sandbox/agent-sandbox/pkg/utils"
 	"k8s.io/klog/v2"
 )
@@ -86,7 +87,7 @@ func (a *Handler) DeleteSandbox(w http.ResponseWriter, r *http.Request) {
 
 	klog.V(2).Infof("Delete sandbox sandboxID=%s", sandboxID)
 
-	err := a.controller.DeleteByID(sandboxID)
+	err := a.controller.DeleteByIDWithReason(sandboxID, telemetry.ReasonE2BSDK)
 	if err != nil {
 		klog.ErrorS(err, "error deleting sandbox", "sandboxID", sandboxID)
 		sendAPIError(w, http.StatusBadRequest, fmt.Sprintf("failed to delete sandbox %s: %v", sandboxID, err))
@@ -191,7 +192,6 @@ func (a *Handler) CreateSandbox(ctx context.Context, newSandbox *api.NewSandbox)
 	sbCreated, err := a.controller.Create(sb)
 	if err != nil {
 		klog.ErrorS(err, "error creating sandbox", "sandbox", sb)
-
 		return nil, &APIError{
 			Err:       err,
 			ClientMsg: "error creating sandbox, error " + err.Error(),
@@ -202,6 +202,35 @@ func (a *Handler) CreateSandbox(ctx context.Context, newSandbox *api.NewSandbox)
 	apiSbx := a.convertToE2BSandbox(sbCreated)
 
 	return apiSbx, nil
+}
+
+func (a *Handler) SnapshotSandbox(w http.ResponseWriter, r *http.Request) {
+	sandboxID := r.PathValue("sandboxID")
+	if sandboxID == "" {
+		sendAPIError(w, http.StatusBadRequest, "sandboxID is required")
+		return
+	}
+
+	sb, err := a.controller.GetByID(sandboxID)
+	if err != nil {
+		klog.Errorf("Get sandbox %s error: %v", sandboxID, err)
+		sendAPIError(w, http.StatusNotFound, fmt.Sprintf("sandbox %s not found", sandboxID))
+		return
+	}
+
+	err = a.controller.SandboxProcessSnapshot(sb)
+	if err != nil {
+		klog.Errorf("Failed to snapshot sandbox %s: %v", sb.Name, err)
+		sendAPIError(w, http.StatusInternalServerError, fmt.Sprintf("failed to snapshot sandbox %s: %v", sb.Name, err))
+		return
+	}
+
+	apiSbx := api.Snapshot{
+		SnapshotID: sb.ID,
+		Names:      []string{sb.Name},
+	}
+	sendAPIOK(w, http.StatusCreated, apiSbx)
+	return
 }
 
 func (a *Handler) ConnectSandbox(w http.ResponseWriter, r *http.Request) {
@@ -240,7 +269,11 @@ func (a *Handler) ConnectSandbox(w http.ResponseWriter, r *http.Request) {
 
 func (a *Handler) SandboxRouterOfPath() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		klog.Info("Entering SandboxRouterOfPath", " url=", r.URL.Path, "method=", r.Method, "query=", r.URL.RawQuery)
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		klog.Info("SandboxRouterOfPath ", r.Method, " ", scheme, "://", r.Host, r.RequestURI, " query=", r.URL.RawQuery)
 
 		sandboxID := r.PathValue("sandboxID")
 		if sandboxID == "" {
@@ -292,7 +325,11 @@ func (a *Handler) SandboxRouterOfPath() http.HandlerFunc {
 
 func (a *Handler) SandboxRouterOfDomain() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		klog.Info("Entering SandboxRouterOfDomain", " url=", r.URL, "method=", r.Method, "query=", r.URL.RawQuery)
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		klog.Info("SandboxRouterOfDomain ", r.Method, " ", scheme, "://", r.Host, r.RequestURI, " query=", r.URL.RawQuery)
 
 		// match host and request url is {port}-{sandbox_id}.{domain}/...
 		reqHost := r.Host

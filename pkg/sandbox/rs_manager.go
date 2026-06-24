@@ -76,7 +76,8 @@ func buildReplicaSet(sb *Sandbox) (*v1.ReplicaSet, error) {
 
 // WaitForReplicaSetReady waits for a ReplicaSet to become ready
 func (s *Controller) WaitForReplicaSetReady(sb *Sandbox) error {
-	return wait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
+	// waiting 3 minutes since Node staring time(2m) when not enough resources.
+	return wait.PollUntilContextTimeout(context.TODO(), 500*time.Millisecond, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
 		rsCreated, err := rsclient.Get(s.rootCtx).Lister().ReplicaSets(config.Cfg.SandboxNamespace).Get(sb.Name)
 		if err != nil {
 			if errors.IsNotFound(err) {

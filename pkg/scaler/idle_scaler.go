@@ -17,14 +17,11 @@
 package scaler
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/agent-sandbox/agent-sandbox/pkg/config"
 	"github.com/agent-sandbox/agent-sandbox/pkg/sandbox"
-	v1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	v1meta "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/agent-sandbox/agent-sandbox/pkg/telemetry"
 	"k8s.io/klog/v2"
 )
 
@@ -83,41 +80,18 @@ func (s *Scaler) ScalingDownOfIdleTimeout() {
 			continue
 		}
 
-		reason := "SandboxDeleted"
-		message := fmt.Sprintf("Sandbox deleted due to idle timeout. %d/%d", idleTime, sbxIdleTimeout)
 		if sb.AutoPause && config.CheckFeature(config.Cfg.PauseResume, sb.User) {
-			if err := s.controller.Pause(sb, "idleTimeout"); err != nil {
-				klog.Errorf("Failed to pause sandbox %v, error %v", sb.Name, err)
-				reason = "SandboxPauseFailed"
-				message = fmt.Sprintf("Failed to pause sandbox due to idle timeout. %d/%d, error: %v", idleTime, sbxIdleTimeout, err)
-			} else {
-				reason = "SandboxPaused"
-				message = fmt.Sprintf("Sandbox paused due to idle timeout. %d/%d", idleTime, sbxIdleTimeout)
-				klog.Infof("Paused sandbox %s due to idle timeout. IdleTime: %ds, IdleTimeout: %ds", sb.Name, idleTime, sbxIdleTimeout)
+			klog.Infof("Paused sandbox %s due to idle timeout. IdleTime: %ds, IdleTimeout: %ds", sb.Name, idleTime, sbxIdleTimeout)
+			if err := s.controller.Pause(sb, "idle_timeout"); err != nil {
+				klog.Errorf("Failed to pause sandbox %s, error: %v", sb.Name, err)
 			}
 		} else {
 			klog.Infof("Sandbox %s has been idle for %d seconds (threshold: %d seconds), deleting sandbox",
 				sb.Name, idleTime, sbxIdleTimeout)
-			if err := s.controller.Delete(sb.Name); err != nil {
-				reason = "SandboxDeleteFailed"
-				message = fmt.Sprintf("Failed to delete sandbox due to idle timeout. %d/%d, error: %v", idleTime, sbxIdleTimeout, err)
-				klog.Errorf("Failed to execute idle policy for sandbox %v, error %v", sb.Name, err)
+			if err := s.controller.DeleteWithReason(sb.Name, telemetry.ReasonIdleTimeout); err != nil {
+				klog.Errorf("Failed to delete sandbox %v, error %v", sb.Name, err)
 			}
 		}
-
-		// Record event
-		r := s.activator.Recorder()
-		obj := &v1.ReplicaSet{
-			TypeMeta: v1meta.TypeMeta{
-				Kind:       "ReplicaSet",
-				APIVersion: "apps/v1",
-			},
-			ObjectMeta: v1meta.ObjectMeta{
-				Name:      sb.Name,
-				Namespace: config.Cfg.SandboxNamespace,
-			},
-		}
-		r.Event(obj, corev1.EventTypeWarning, reason, message)
 
 		// to reduce kube-apiserver pressure, QPS is 100, max 30000 can be handled per 5 minutes.
 		time.Sleep(10 * time.Millisecond)

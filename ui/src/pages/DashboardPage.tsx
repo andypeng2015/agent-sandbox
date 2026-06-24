@@ -222,7 +222,7 @@ export default function DashboardPage() {
       <header className="card border border-base-300 bg-base-100 shadow-sm">
         <div className="card-body gap-3">
           <div>
-            <h2 className="text-2xl font-semibold">Dashboard</h2>
+            <h2 className="text-2xl font-semibold">Dashboard (Real time)</h2>
             <p className="text-sm text-base-content/70">Monitor sandbox inventory, capacity, API keys, templates, and recent events.</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -282,26 +282,25 @@ export default function DashboardPage() {
               <h3 className="card-title text-lg">Sandboxes</h3>
               <div className="badge badge-outline">{sandboxes.length} total</div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="radial-progress" style={{"--size": "8rem", "--thickness": "2px", '--value': sandboxes.length > 0 ? Math.round((runningSandboxes * 100) / sandboxes.length) : 0 } as CSSProperties}>
-                {sandboxes.length > 0 ? Math.round((runningSandboxes * 100) / sandboxes.length) : 0}%
+              <div className="flex items-center gap-4">
+                  <div className="stat">
+                      <div className="stat-title">Running Sandboxes</div>
+                      <div className="stat-value text-primary">{runningSandboxes}</div>
+                      <div className="stat-desc">Not in running state: <span className="text-secondary">{otherSandboxes}</span> </div>
+                  </div>
               </div>
-              <div className="space-y-1 text-sm">
-                  <div className="font-medium">Running: <span className="text-lg  badge badge-neutral">{runningSandboxes}</span></div>
-                <div className="text-base-content/70">Other: {otherSandboxes}</div>
-              </div>
-            </div>
           </div>
         </div>
 
-        <div className="card border border-base-300 bg-base-100 shadow-sm xl:col-span-9">
-          <div className="card-body gap-4 py-4">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="card-title text-lg">Templates <span className="text-sm font-thin">(TOP-5)</span></h3>
-              <div className="badge badge-secondary badge-outline">{templateDistribution.length} templates</div>
-            </div>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-3">
-              {templateDistribution.length === 0 ? (
+          <div className="card border border-base-300 bg-base-100 shadow-sm xl:col-span-9">
+              <div className="card-body gap-4 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                      <h3 className="card-title text-lg">Templates <span className="text-sm font-thin">(TOP-5)</span>
+                      </h3>
+                      <div className="badge badge-secondary badge-outline">{templateDistribution.length} templates</div>
+                  </div>
+                  <div className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-3">
+                  {templateDistribution.length === 0 ? (
                 <div className="text-sm text-base-content/60">No template usage found.</div>
               ) : (
                 templateDistribution.slice(0, topItemLimit).map((item, index) => (

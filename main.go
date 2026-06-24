@@ -14,6 +14,7 @@ import (
 	"github.com/agent-sandbox/agent-sandbox/pkg/handler"
 	"github.com/agent-sandbox/agent-sandbox/pkg/sandbox"
 	"github.com/agent-sandbox/agent-sandbox/pkg/scaler"
+	"github.com/agent-sandbox/agent-sandbox/pkg/telemetry"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
@@ -41,10 +42,9 @@ func main() {
 	klog.Infof("Loaded config %+v", config.Cfg)
 
 	// set log level
-	if cfg.EnvName == "dev" {
-		fs.Set("v", "2")
-	} else {
-		fs.Set("v", "0")
+	err = fs.Set("v", cfg.LogLevel)
+	if err != nil {
+		log.Fatalf("Failed to set log level: %v", err)
 	}
 
 	klog.Info("Setup k8s cluster connection and start informers")
@@ -57,7 +57,7 @@ func main() {
 	log.Printf("Registering %d informers", len(injection.Default.GetInformers()))
 	log.Printf("Registering %d filtered informers", len(injection.Default.GetFilteredInformers()))
 
-	kubecfg.QPS = 20 * rest.DefaultQPS
+	kubecfg.QPS = 200 * rest.DefaultQPS
 	kubecfg.Burst = 20 * rest.DefaultBurst
 	rootCtx = injection.WithNamespaceScope(rootCtx, config.Cfg.SandboxNamespace)
 	rootCtx, informers := injection.Default.SetupInformers(rootCtx, kubecfg)
@@ -96,9 +96,10 @@ func main() {
 	}
 	log.Printf("Starting informers %v", len(informers))
 
+	eventRecoder := activator.GetRecorder(rootCtx)
 	pl := sandbox.NewPoolManager(rootCtx)
-	a := activator.NewActivator(rootCtx)
-	c := sandbox.NewController(rootCtx, kubecfg, pl)
+	a := activator.NewActivator(rootCtx, eventRecoder)
+	c := sandbox.NewController(rootCtx, kubecfg, pl, eventRecoder)
 	c.MetricsClient = metricsClient
 
 	// Start the autoscaler
@@ -116,6 +117,20 @@ func main() {
 
 	// Start the capacity manager
 	capacity.Init(c)
+
+	// Init lifecycle-event telemetry. No-op when Telemetry.Enabled is false.
+	telemetry.Init(rootCtx, telemetry.Settings{
+		Enabled:    cfg.Telemetry.Enabled,
+		BufferSize: cfg.Telemetry.BufferSize,
+		SampleRate: cfg.Telemetry.SampleRate,
+	}, cfg.Telemetry.OTLPEndpoint, cfg.Telemetry.OTLPURLPath, cfg.Telemetry.OTLPInsecure)
+	defer func() {
+		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancelShutdown()
+		if err := telemetry.Shutdown(shutdownCtx); err != nil {
+			klog.Warningf("Telemetry shutdown error: %v", err)
+		}
+	}()
 
 	klog.Info("Starting the api server")
 	apiServer := handler.New(rootCtx, a, c)
